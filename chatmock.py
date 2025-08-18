@@ -271,6 +271,14 @@ def create_app(
             messages = []
         if not isinstance(messages, list):
             return jsonify({"error": {"message": "Request must include messages: []"}}), 400
+
+        # Convert first system prompt into a user message by default (beta thing)
+        if isinstance(messages, list):
+            sys_idx = next((i for i, m in enumerate(messages) if isinstance(m, dict) and m.get("role") == "system"), None)
+            if isinstance(sys_idx, int):
+                sys_msg = messages.pop(sys_idx)
+                content = sys_msg.get("content") if isinstance(sys_msg, dict) else ""
+                messages.insert(0, {"role": "user", "content": content})
         is_stream = bool(payload.get("stream"))
 
         tools_responses = convert_tools_chat_to_responses(payload.get("tools"))
@@ -555,6 +563,13 @@ def create_app(
         model = payload.get("model")
         raw_messages = payload.get("messages")
         messages = _convert_ollama_messages(raw_messages, payload.get("images") if isinstance(payload.get("images"), list) else None)
+        # Convert first system prompt into a user message by default
+        if isinstance(messages, list):
+            sys_idx = next((i for i, m in enumerate(messages) if isinstance(m, dict) and m.get("role") == "system"), None)
+            if isinstance(sys_idx, int):
+                sys_msg = messages.pop(sys_idx)
+                content = sys_msg.get("content") if isinstance(sys_msg, dict) else ""
+                messages.insert(0, {"role": "user", "content": content})
         stream_req = payload.get("stream")
         if stream_req is None:
             stream_req = True
@@ -1103,6 +1118,7 @@ def main() -> None:
         default=os.getenv("CHATGPT_LOCAL_REASONING_COMPAT", "think-tags").lower(),
         help="Compatibility mode for exposing reasoning to clients (legacy|o3|think-tags). 'current' is accepted as an alias for 'legacy'",
     )
+    # System prompt handling is now default; no flag needed.
 
     p_info = sub.add_parser("info", help="Print current stored tokens and derived account id")
     p_info.add_argument("--json", action="store_true", help="Output raw auth.json contents")
