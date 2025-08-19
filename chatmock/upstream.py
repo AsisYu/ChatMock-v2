@@ -9,6 +9,8 @@ from flask import Response, jsonify, make_response
 
 from .config import CHATGPT_RESPONSES_URL
 from .http import build_cors_headers
+from .session import ensure_session_id
+from flask import request as flask_request
 from .utils import get_effective_chatgpt_auth
 
 
@@ -59,6 +61,17 @@ def start_upstream_request(
     if isinstance(reasoning_param, dict) and reasoning_param.get("effort") != "none":
         include.append("reasoning.encrypted_content")
 
+    client_session_id = None
+    try:
+        client_session_id = (
+            flask_request.headers.get("X-Session-Id")
+            or flask_request.headers.get("session_id")
+            or None
+        )
+    except Exception:
+        client_session_id = None
+    session_id = ensure_session_id(instructions, input_items, client_session_id)
+
     responses_payload = {
         "model": model,
         "instructions": instructions if isinstance(instructions, str) and instructions.strip() else instructions,
@@ -69,6 +82,7 @@ def start_upstream_request(
         "store": False,
         "stream": True,
         "include": include,
+        "prompt_cache_key": session_id,
     }
 
     if reasoning_param is not None:
@@ -80,6 +94,7 @@ def start_upstream_request(
         "Accept": "text/event-stream",
         "chatgpt-account-id": account_id,
         "OpenAI-Beta": "responses=experimental",
+        "session_id": session_id,
     }
 
     try:
@@ -96,4 +111,3 @@ def start_upstream_request(
             resp.headers.setdefault(k, v)
         return None, resp
     return upstream, None
-
