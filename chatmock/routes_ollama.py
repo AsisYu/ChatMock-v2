@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import datetime
 import time
 from typing import Any, Dict, List
 
-from flask import Blueprint, Response, current_app, jsonify, make_response, request
+from flask import Blueprint, Response, current_app, jsonify, make_response, request, stream_with_context
 
 from .config import BASE_INSTRUCTIONS
 from .http import build_cors_headers
@@ -160,7 +161,8 @@ def ollama_chat() -> Response:
             upstream.status_code,
         )
 
-    created_at = str(int(time.time() * 1000))
+    created_at = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    model_out = normalize_model_name(model)
 
     if stream_req:
         def _gen():
@@ -169,6 +171,7 @@ def ollama_chat() -> Response:
             think_closed = False
             saw_any_summary = False
             pending_summary_paragraph = False
+            full_parts: List[str] = []
             try:
                 for raw_line in upstream.iter_lines(decode_unicode=False):
                     if not raw_line:
@@ -196,31 +199,134 @@ def ollama_chat() -> Response:
                         delta_txt = evt.get("delta") or ""
                         if compat == "o3":
                             if kind == "response.reasoning_summary_text.delta" and pending_summary_paragraph:
-                                yield json.dumps({"message": {"role": "assistant", "content": "\n"}}) + "\n"
+                                yield (
+                                    json.dumps(
+                                        {
+                                            "model": model_out,
+                                            "created_at": created_at,
+                                            "message": {"role": "assistant", "content": "\n"},
+                                            "done": False,
+                                        }
+                                    )
+                                    + "\n"
+                                )
+                                full_parts.append("\n")
                                 pending_summary_paragraph = False
+                            if delta_txt:
+                                yield (
+                                    json.dumps(
+                                        {
+                                            "model": model_out,
+                                            "created_at": created_at,
+                                            "message": {"role": "assistant", "content": delta_txt},
+                                            "done": False,
+                                        }
+                                    )
+                                    + "\n"
+                                )
+                                full_parts.append(delta_txt)
                         elif compat == "think-tags":
                             if not think_open and not think_closed:
-                                yield json.dumps({"message": {"role": "assistant", "content": "<think>"}}) + "\n"
+                                yield (
+                                    json.dumps(
+                                        {
+                                            "model": model_out,
+                                            "created_at": created_at,
+                                            "message": {"role": "assistant", "content": "<think>"},
+                                            "done": False,
+                                        }
+                                    )
+                                    + "\n"
+                                )
+                                full_parts.append("<think>")
                                 think_open = True
                             if think_open and not think_closed:
                                 if kind == "response.reasoning_summary_text.delta" and pending_summary_paragraph:
-                                    yield json.dumps({"message": {"role": "assistant", "content": "\n"}}) + "\n"
+                                    yield (
+                                        json.dumps(
+                                            {
+                                                "model": model_out,
+                                                "created_at": created_at,
+                                                "message": {"role": "assistant", "content": "\n"},
+                                                "done": False,
+                                            }
+                                        )
+                                        + "\n"
+                                    )
+                                    full_parts.append("\n")
                                     pending_summary_paragraph = False
+                                if delta_txt:
+                                    yield (
+                                        json.dumps(
+                                            {
+                                                "model": model_out,
+                                                "created_at": created_at,
+                                                "message": {"role": "assistant", "content": delta_txt},
+                                                "done": False,
+                                            }
+                                        )
+                                        + "\n"
+                                    )
+                                    full_parts.append(delta_txt)
                         else:
                             pass
                     elif kind == "response.output_text.delta":
                         delta = evt.get("delta") or ""
                         if compat == "think-tags" and think_open and not think_closed:
-                            yield json.dumps({"message": {"role": "assistant", "content": "</think>"}}) + "\n"
+                            yield (
+                                json.dumps(
+                                    {
+                                        "model": model_out,
+                                        "created_at": created_at,
+                                        "message": {"role": "assistant", "content": "</think>"},
+                                        "done": False,
+                                    }
+                                )
+                                + "\n"
+                            )
+                            full_parts.append("</think>")
                             think_open = False
                             think_closed = True
-                        yield json.dumps({"message": {"role": "assistant", "content": delta}}) + "\n"
+                        if delta:
+                            yield (
+                                json.dumps(
+                                    {
+                                        "model": model_out,
+                                        "created_at": created_at,
+                                        "message": {"role": "assistant", "content": delta},
+                                        "done": False,
+                                    }
+                                )
+                                + "\n"
+                            )
+                            full_parts.append(delta)
                     elif kind == "response.completed":
                         break
             finally:
                 upstream.close()
+                if compat == "think-tags" and think_open and not think_closed:
+                    yield (
+                        json.dumps(
+                            {
+                                "model": model_out,
+                                "created_at": created_at,
+                                "message": {"role": "assistant", "content": "</think>"},
+                                "done": False,
+                            }
+                        )
+                        + "\n"
+                    )
+                    full_parts.append("</think>")
+                done_obj = {
+                    "model": model_out,
+                    "created_at": created_at,
+                    "message": {"role": "assistant", "content": "".join(full_parts)},
+                    "done": True,
+                }
+                done_obj.update(_OLLAMA_FAKE_EVAL)
+                yield json.dumps(done_obj) + "\n"
         resp = current_app.response_class(
-            _gen(),
+            stream_with_context(_gen()),
             status=200,
             mimetype="application/x-ndjson",
         )
@@ -296,4 +402,3 @@ def ollama_chat() -> Response:
     for k, v in build_cors_headers().items():
         resp.headers.setdefault(k, v)
     return resp
-
