@@ -72,7 +72,7 @@ def parse_jwt_claims(token: str) -> Dict[str, Any] | None:
 
 
 def generate_pkce() -> "PkceCodes":
-    from models import PkceCodes
+    from .models import PkceCodes
 
     code_verifier = secrets.token_hex(64)
     digest = hashlib.sha256(code_verifier.encode()).digest()
@@ -399,8 +399,6 @@ def sse_translate_chat(
                             "choices": [{"index": 0, "delta": {"content": delta_txt}, "finish_reason": None}],
                         }
                         yield f"data: {json.dumps(content_chunk)}\n\n".encode("utf-8")
-                    else:
-                        pass
                 else:
                     if kind == "response.reasoning_summary_text.delta":
                         chunk = {
@@ -515,3 +513,4 @@ def sse_translate_text(upstream, model: str, created: int, verbose: bool = False
                 break
     finally:
         upstream.close()
+

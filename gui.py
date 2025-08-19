@@ -7,8 +7,9 @@ import multiprocessing as mp
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from chatmock import create_app, cmd_login
-from utils import load_chatgpt_tokens, parse_jwt_claims
+from chatmock.app import create_app
+from chatmock.cli import cmd_login
+from chatmock.utils import load_chatgpt_tokens, parse_jwt_claims
 
 
 def run_server(host: str, port: int, reasoning_effort: str = "medium", reasoning_summary: str = "auto") -> None:
@@ -46,9 +47,11 @@ class ServerProcess(QtCore.QObject):
         ]
         self._proc.start(sys.executable, args)
         self._proc.started.connect(lambda: self.state_changed.emit(True))
+
         def _on_finished(code: int, status: QtCore.QProcess.ExitStatus) -> None:
             self.state_changed.emit(False)
             self._proc = None
+
         self._proc.finished.connect(_on_finished)
 
     def stop(self) -> None:
@@ -101,14 +104,14 @@ def is_dark_mode() -> bool:
 def apply_theme() -> None:
     dark = is_dark_mode()
     if dark:
-        bg = "#111827"         # slate-900
-        text = "#e5e7eb"       # gray-200
-        subtext = "#9ca3af"    # gray-400
-        border = "#374151"     # slate-700
-        primary = "#3b82f6"    # blue-500
+        bg = "#111827"  # slate-900
+        text = "#e5e7eb"  # gray-200
+        subtext = "#9ca3af"  # gray-400
+        border = "#374151"  # slate-700
+        primary = "#3b82f6"  # blue-500
         primary_hover = "#2563eb"
-        danger = "#ef4444"     # red-500
-        field_bg = "#0f172a"   # slightly lighter (inputs)
+        danger = "#ef4444"  # red-500
+        field_bg = "#0f172a"  # slightly lighter (inputs)
     else:
         bg = "#ffffff"
         text = "#0f172a"
@@ -314,7 +317,9 @@ class MainWindow(QtWidgets.QMainWindow):
         url_row = QtWidgets.QHBoxLayout()
         url_row.addWidget(QtWidgets.QLabel("Base URL:"))
         self.baseurl = QtWidgets.QLabel("(server not running)")
-        self.baseurl.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse | QtCore.Qt.TextSelectableByKeyboard)
+        self.baseurl.setTextInteractionFlags(
+            QtCore.Qt.TextSelectableByMouse | QtCore.Qt.TextSelectableByKeyboard
+        )
         self.baseurl.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
         url_row.addWidget(self.baseurl, 1)
         self.btn_copy = QtWidgets.QPushButton("Copy")
@@ -364,7 +369,9 @@ class MainWindow(QtWidgets.QMainWindow):
             email = id_claims.get("email") or id_claims.get("preferred_username") or "<unknown>"
             plan_raw = (access_claims.get("https://api.openai.com/auth") or {}).get("chatgpt_plan_type") or "unknown"
             plan_map = {"plus": "Plus", "pro": "Pro", "free": "Free", "team": "Team", "enterprise": "Enterprise"}
-            plan = plan_map.get(str(plan_raw).lower(), str(plan_raw).title() if isinstance(plan_raw, str) else "Unknown")
+            plan = plan_map.get(
+                str(plan_raw).lower(), str(plan_raw).title() if isinstance(plan_raw, str) else "Unknown"
+            )
             self.email_value.setText(email)
             self.plan_value.setText(plan)
             self.accid_value.setText(account_id or "-")
@@ -395,7 +402,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if code == 0:
             QtWidgets.QMessageBox.information(self, "Login", "Login successful. You can now start the server.")
         elif code == 13:
-            QtWidgets.QMessageBox.warning(self, "Login", "Login helper port is in use. Close other instances and try again.")
+            QtWidgets.QMessageBox.warning(
+                self, "Login", "Login helper port is in use. Close other instances and try again."
+            )
         else:
             QtWidgets.QMessageBox.critical(self, "Login", "Login failed. Please try again.")
         self._refresh_login_state()
@@ -425,7 +434,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.status.setText("Serving • Running in background")
             self.baseurl.setText(self._server.base_url())
             self.hide()
-            self.tray.showMessage("ChatMock", "Server is running in the background", QtWidgets.QSystemTrayIcon.Information, 1500)
+            self.tray.showMessage(
+                "ChatMock", "Server is running in the background", QtWidgets.QSystemTrayIcon.Information, 1500
+            )
         else:
             self.status.setText("Server stopped")
             self.baseurl.setText("(server not running)")
@@ -450,6 +461,7 @@ def main() -> None:
     mp.freeze_support()
     if "--run-server" in sys.argv:
         import argparse
+
         p = argparse.ArgumentParser(add_help=False)
         p.add_argument("--run-server", action="store_true")
         p.add_argument("--host", default="127.0.0.1")
@@ -469,3 +481,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

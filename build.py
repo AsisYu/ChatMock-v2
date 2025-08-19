@@ -158,7 +158,7 @@ def make_dmg(app_path: Path, dmg_path: Path, volume_name: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--name", default="ChatMock")
-    parser.add_argument("--entry", default="app_qt.py")
+    parser.add_argument("--entry", default="gui.py")
     parser.add_argument("--icon", default="icon.png")
     parser.add_argument("--radius", type=float, default=0.22)
     parser.add_argument("--square", action="store_true")

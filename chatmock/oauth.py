@@ -10,8 +10,8 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict, Tuple
 
-from models import AuthBundle, PkceCodes, TokenData
-from utils import eprint, generate_pkce, parse_jwt_claims, write_auth_file
+from .models import AuthBundle, PkceCodes, TokenData
+from .utils import eprint, generate_pkce, parse_jwt_claims, write_auth_file
 
 
 REQUIRED_PORT = 1455
@@ -31,7 +31,7 @@ LOGIN_SUCCESS_HTML = """<!DOCTYPE html>
       <p>You can now close this window and return to the terminal and run <code>python3 chatmock.py serve</code> to start the server.</p>
     </div>
   </body>
-</html>
+  </html>
 """
 
 
@@ -258,3 +258,4 @@ class OAuthHandler(http.server.BaseHTTPRequestHandler):
         }
         success_url = f"{URL_BASE}/success?{urllib.parse.urlencode(success_url_query)}"
         return exchanged_access_token, success_url
+
