@@ -58,7 +58,7 @@ def start_upstream_request(
         return None, resp
 
     include: List[str] = []
-    if isinstance(reasoning_param, dict) and reasoning_param.get("effort") != "none":
+    if isinstance(reasoning_param, dict):
         include.append("reasoning.encrypted_content")
 
     client_session_id = None

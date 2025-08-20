@@ -9,7 +9,7 @@ def build_reasoning_param(
     effort = (base_effort or "").strip().lower()
     summary = (base_summary or "").strip().lower()
 
-    valid_efforts = {"low", "medium", "high", "none"}
+    valid_efforts = {"minimal", "low", "medium", "high"}
     valid_summaries = {"auto", "concise", "detailed", "none"}
 
     if isinstance(overrides, dict):

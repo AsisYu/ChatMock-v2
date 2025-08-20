@@ -85,7 +85,7 @@ def main() -> None:
     )
     p_serve.add_argument(
         "--reasoning-effort",
-        choices=["low", "medium", "high", "none"],
+        choices=["minimal", "low", "medium", "high"],
         default=os.getenv("CHATGPT_LOCAL_REASONING_EFFORT", "medium").lower(),
         help="Reasoning effort level for Responses API (default: medium)",
     )
