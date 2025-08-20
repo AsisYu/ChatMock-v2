@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import ssl
 import http.server
 import json
 import secrets
@@ -9,6 +10,8 @@ import time
 import urllib.parse
 import urllib.request
 from typing import Any, Dict, Tuple
+
+import certifi
 
 from .models import AuthBundle, PkceCodes, TokenData
 from .utils import eprint, generate_pkce, parse_jwt_claims, write_auth_file
@@ -34,6 +37,7 @@ LOGIN_SUCCESS_HTML = """<!DOCTYPE html>
   </html>
 """
 
+_SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
 
 class OAuthHTTPServer(http.server.HTTPServer):
     def __init__(
@@ -174,7 +178,8 @@ class OAuthHandler(http.server.BaseHTTPRequestHandler):
                 data=data,
                 method="POST",
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
+            ),
+            context=_SSL_CONTEXT,
         ) as resp:
             payload = json.loads(resp.read().decode())
 
@@ -242,7 +247,8 @@ class OAuthHandler(http.server.BaseHTTPRequestHandler):
                 data=exchange_data,
                 method="POST",
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
+            ),
+            context=_SSL_CONTEXT,
         ) as resp:
             exchange_payload = json.loads(resp.read().decode())
             exchanged_access_token = exchange_payload.get("access_token")
@@ -258,4 +264,3 @@ class OAuthHandler(http.server.BaseHTTPRequestHandler):
         }
         success_url = f"{URL_BASE}/success?{urllib.parse.urlencode(success_url_query)}"
         return exchanged_access_token, success_url
-

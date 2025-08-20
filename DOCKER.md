@@ -1,0 +1,39 @@
+# Docker Deployment
+
+## Quick Start
+1) Setup env:
+   cp .env.example .env
+
+2) Build the image:
+   docker compose build
+
+3) Login:
+   docker compose run --rm --service-ports chatmock-login login
+   - The command prints an auth URL, copy paste it into your browser.
+   - Server should stop automatically once it recieves the tokens and they are saved.
+
+4) Start the server:
+   docker compose up -d chatmock
+
+5) Free to use it in whichever chat app you like!
+
+## Configuration
+Set options in `.env` or pass environment variables:
+- `PORT`: Container listening port (default 8000)
+- `VERBOSE`: `true|false` to enable request/stream logs
+- `CHATGPT_LOCAL_REASONING_EFFORT`: minimal|low|medium|high
+- `CHATGPT_LOCAL_REASONING_SUMMARY`: auto|concise|detailed|none
+- `CHATGPT_LOCAL_REASONING_COMPAT`: legacy|o3|think-tags|current
+- `CHATGPT_LOCAL_DEBUG_MODEL`: force model override (e.g., `gpt-5`)
+- `CHATGPT_LOCAL_CLIENT_ID`: OAuth client id override (rarely needed)
+
+## Logs
+Set `VERBOSE=true` to include extra logging for debugging issues in upstream or chat app requests. Please include and use these logs when submitting bug reports.
+
+## Test
+
+```
+curl -s http://localhost:8000/v1/chat/completions \
+   -H 'Content-Type: application/json' \
+   -d '{"model":"gpt-5","messages":[{"role":"user","content":"Hello world!"}]}' | jq .
+```

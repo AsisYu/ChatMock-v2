@@ -11,6 +11,7 @@ from .app import create_app
 from .config import CLIENT_ID_DEFAULT
 from .oauth import OAuthHTTPServer, OAuthHandler, REQUIRED_PORT, URL_BASE
 from .utils import eprint, get_home_dir, load_chatgpt_tokens, parse_jwt_claims, read_auth_file
+import os
 
 
 def cmd_login(no_browser: bool, verbose: bool) -> int:
@@ -21,7 +22,8 @@ def cmd_login(no_browser: bool, verbose: bool) -> int:
         return 1
 
     try:
-        httpd = OAuthHTTPServer(("127.0.0.1", REQUIRED_PORT), OAuthHandler, home_dir=home_dir, client_id=client_id, verbose=verbose)
+        bind_host = os.getenv("CHATGPT_LOCAL_LOGIN_BIND", "127.0.0.1")
+        httpd = OAuthHTTPServer((bind_host, REQUIRED_PORT), OAuthHandler, home_dir=home_dir, client_id=client_id, verbose=verbose)
     except OSError as e:
         eprint(f"ERROR: {e}")
         if e.errno == errno.EADDRINUSE:
