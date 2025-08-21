@@ -239,6 +239,8 @@ def sse_translate_chat(
     verbose: bool = False,
     vlog=None,
     reasoning_compat: str = "think-tags",
+    *,
+    include_usage: bool = False,
 ):
     response_id = "chatcmpl-stream"
     compat = (reasoning_compat or "think-tags").strip().lower()
@@ -247,6 +249,19 @@ def sse_translate_chat(
     saw_output = False
     saw_any_summary = False
     pending_summary_paragraph = False
+    upstream_usage = None
+    
+    def _extract_usage(evt: Dict[str, Any]) -> Dict[str, int] | None:
+        try:
+            usage = (evt.get("response") or {}).get("usage")
+            if not isinstance(usage, dict):
+                return None
+            pt = int(usage.get("input_tokens") or 0)
+            ct = int(usage.get("output_tokens") or 0)
+            tt = int(usage.get("total_tokens") or (pt + ct))
+            return {"prompt_tokens": pt, "completion_tokens": ct, "total_tokens": tt}
+        except Exception:
+            return None
     try:
         for raw in upstream.iter_lines(decode_unicode=False):
             if not raw:
@@ -442,6 +457,9 @@ def sse_translate_chat(
                 chunk = {"error": {"message": err}}
                 yield f"data: {json.dumps(chunk)}\n\n".encode("utf-8")
             elif kind == "response.completed":
+                m = _extract_usage(evt)
+                if m:
+                    upstream_usage = m
                 if compat == "think-tags" and think_open and not think_closed:
                     close_chunk = {
                         "id": response_id,
@@ -453,14 +471,40 @@ def sse_translate_chat(
                     yield f"data: {json.dumps(close_chunk)}\n\n".encode("utf-8")
                     think_open = False
                     think_closed = True
+                if include_usage and upstream_usage:
+                    try:
+                        usage_chunk = {
+                            "id": response_id,
+                            "object": "chat.completion.chunk",
+                            "created": created,
+                            "model": model,
+                            "choices": [{"index": 0, "delta": {}, "finish_reason": None}],
+                            "usage": upstream_usage,
+                        }
+                        yield f"data: {json.dumps(usage_chunk)}\n\n".encode("utf-8")
+                    except Exception:
+                        pass
                 yield b"data: [DONE]\n\n"
                 break
     finally:
         upstream.close()
 
 
-def sse_translate_text(upstream, model: str, created: int, verbose: bool = False, vlog=None):
+def sse_translate_text(upstream, model: str, created: int, verbose: bool = False, vlog=None, *, include_usage: bool = False):
     response_id = "cmpl-stream"
+    upstream_usage = None
+    
+    def _extract_usage(evt: Dict[str, Any]) -> Dict[str, int] | None:
+        try:
+            usage = (evt.get("response") or {}).get("usage")
+            if not isinstance(usage, dict):
+                return None
+            pt = int(usage.get("input_tokens") or 0)
+            ct = int(usage.get("output_tokens") or 0)
+            tt = int(usage.get("total_tokens") or (pt + ct))
+            return {"prompt_tokens": pt, "completion_tokens": ct, "total_tokens": tt}
+        except Exception:
+            return None
     try:
         for raw_line in upstream.iter_lines(decode_unicode=False):
             if not raw_line:
@@ -509,8 +553,23 @@ def sse_translate_text(upstream, model: str, created: int, verbose: bool = False
                 }
                 yield f"data: {json.dumps(chunk)}\n\n".encode("utf-8")
             elif kind == "response.completed":
+                m = _extract_usage(evt)
+                if m:
+                    upstream_usage = m
+                if include_usage and upstream_usage:
+                    try:
+                        usage_chunk = {
+                            "id": response_id,
+                            "object": "text_completion.chunk",
+                            "created": created,
+                            "model": model,
+                            "choices": [{"index": 0, "text": "", "finish_reason": None}],
+                            "usage": upstream_usage,
+                        }
+                        yield f"data: {json.dumps(usage_chunk)}\n\n".encode("utf-8")
+                    except Exception:
+                        pass
                 yield b"data: [DONE]\n\n"
                 break
     finally:
         upstream.close()
-

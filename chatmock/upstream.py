@@ -40,6 +40,7 @@ def start_upstream_request(
     tool_choice: Any | None = None,
     parallel_tool_calls: bool = False,
     reasoning_param: Dict[str, Any] | None = None,
+    include_usage: bool | None = None,
 ):
     access_token, account_id = get_effective_chatgpt_auth()
     if not access_token or not account_id:
@@ -81,9 +82,10 @@ def start_upstream_request(
         "parallel_tool_calls": bool(parallel_tool_calls),
         "store": False,
         "stream": True,
-        "include": include,
         "prompt_cache_key": session_id,
     }
+    if include:
+        responses_payload["include"] = include
 
     if reasoning_param is not None:
         responses_payload["reasoning"] = reasoning_param
