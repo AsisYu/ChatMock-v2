@@ -87,7 +87,6 @@ def chat_completions() -> Response:
         tool_choice=tool_choice,
         parallel_tool_calls=parallel_tool_calls,
         reasoning_param=reasoning_param,
-        include_usage=(not is_stream) or include_usage,
     )
     if error_resp is not None:
         return error_resp
@@ -256,7 +255,6 @@ def completions() -> Response:
         input_items,
         instructions=BASE_INSTRUCTIONS,
         reasoning_param=reasoning_param,
-        include_usage=(not stream_req) or include_usage,
     )
     if error_resp is not None:
         return error_resp
