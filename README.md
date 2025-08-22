@@ -29,7 +29,7 @@ If you're on **macOS**, you can download the GUI app from the [GitHub releases](
 
 You can also install ChatMock as a command-line tool using [Homebrew](https://brew.sh/):
 ```
-brew tap RayBytes/ChatMock
+brew tap RayBytes/chatmock
 brew install chatmock
 ```
 
