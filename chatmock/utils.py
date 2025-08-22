@@ -424,7 +424,7 @@ def sse_translate_chat(
                             "choices": [
                                 {
                                     "index": 0,
-                                    "delta": {"reasoning_summary": delta_txt},
+                                    "delta": {"reasoning_summary": delta_txt, "reasoning": delta_txt},
                                     "finish_reason": None,
                                 }
                             ],
