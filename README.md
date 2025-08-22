@@ -13,12 +13,25 @@ This does require a paid ChatGPT account.
 ## Quickstart
 
 ### Mac Users
-If you use MacOS, you can use the GUI application in the Github releases. Unfortunately, due to not being part of the paid apple developer program, you will have to click "Open anyway" in security after trying to right click and open the app. If that doesn't work you will have to type this command in the terminal on Mac to ensure you can run the application: <br>
-`xattr -dr com.apple.quarantine /Applications/ChatMock.app`<br>
-*See more info [here](https://github.com/deskflow/deskflow/wiki/Running-on-macOS)*
 
-### Windows Users
-Simply download and run the app in the releases. As I do not own a windows computer I cannot fully bug test this, so please do report bugs in issues.
+#### GUI Application
+
+If you're on **macOS**, you can download the GUI app from the [GitHub releases](https://github.com/RayBytes/ChatMock/releases).  
+> **Note:** Since ChatMock isn't signed with an Apple Developer ID, you may need to run the following command in your terminal to open the app:
+>
+> ```bash
+> xattr -dr com.apple.quarantine /Applications/ChatMock.app
+> ```
+>
+> *[More info here.](https://github.com/deskflow/deskflow/wiki/Running-on-macOS)*
+
+#### Command Line (Homebrew)
+
+You can also install ChatMock as a command-line tool using [Homebrew](https://brew.sh/):
+```
+brew tap RayBytes/ChatMock
+brew install chatmock
+```
 
 ### Python
 If you wish to just simply run this as a python flask server, you are also freely welcome too.
