@@ -72,3 +72,29 @@ def apply_reasoning_to_message(
             message["content"] = think_block + (content_text or "")
     return message
 
+
+def extract_reasoning_from_model_name(model: str | None) -> Dict[str, Any] | None:
+    """Infer reasoning overrides from a model."""
+    if not isinstance(model, str) or not model:
+        return None
+    s = model.strip().lower()
+    if not s:
+        return None
+    efforts = {"minimal", "low", "medium", "high"}
+
+    if ":" in s:
+        maybe = s.rsplit(":", 1)[-1].strip()
+        if maybe in efforts:
+            return {"effort": maybe}
+
+    for sep in ("-", "_"):
+        if s.endswith(sep + "minimal"):
+            return {"effort": "minimal"}
+        if s.endswith(sep + "low"):
+            return {"effort": "low"}
+        if s.endswith(sep + "medium"):
+            return {"effort": "medium"}
+        if s.endswith(sep + "high"):
+            return {"effort": "high"}
+
+    return None

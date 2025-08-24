@@ -54,6 +54,7 @@ def cmd_serve(
     reasoning_summary: str,
     reasoning_compat: str,
     debug_model: str | None,
+    expose_reasoning_models: bool,
 ) -> int:
     app = create_app(
         verbose=verbose,
@@ -61,6 +62,7 @@ def cmd_serve(
         reasoning_summary=reasoning_summary,
         reasoning_compat=reasoning_compat,
         debug_model=debug_model,
+        expose_reasoning_models=expose_reasoning_models,
     )
 
     app.run(host=host, debug=False, use_reloader=False, port=port, threaded=True)
@@ -106,6 +108,15 @@ def main() -> None:
             "'current' is accepted as an alias for 'legacy'"
         ),
     )
+    p_serve.add_argument(
+        "--expose-reasoning-models",
+        action="store_true",
+        default=os.getenv("CHATGPT_LOCAL_EXPOSE_REASONING_MODELS", "").strip().lower() in ("1", "true", "yes", "on"),
+        help=(
+            "Expose gpt-5 reasoning effort variants (minimal|low|medium|high) as separate models from /v1/models. "
+            "This allows choosing effort via model selection in compatible UIs."
+        ),
+    )
 
     p_info = sub.add_parser("info", help="Print current stored tokens and derived account id")
     p_info.add_argument("--json", action="store_true", help="Output raw auth.json contents")
@@ -124,6 +135,7 @@ def main() -> None:
                 reasoning_summary=args.reasoning_summary,
                 reasoning_compat=args.reasoning_compat,
                 debug_model=args.debug_model,
+                expose_reasoning_models=args.expose_reasoning_models,
             )
         )
     elif args.command == "info":

@@ -9,7 +9,7 @@ from flask import Blueprint, Response, current_app, jsonify, make_response, requ
 
 from .config import BASE_INSTRUCTIONS
 from .http import build_cors_headers
-from .reasoning import build_reasoning_param
+from .reasoning import build_reasoning_param, extract_reasoning_from_model_name
 from .transform import convert_ollama_messages, normalize_ollama_tools
 from .upstream import normalize_model_name, start_upstream_request
 from .utils import convert_chat_messages_to_responses_input, convert_tools_chat_to_responses
@@ -32,24 +32,39 @@ _OLLAMA_FAKE_EVAL = {
 def ollama_tags() -> Response:
     if bool(current_app.config.get("VERBOSE")):
         print("IN GET /api/tags")
-    model_id = "gpt-5"
-    models = [
-        {
-            "name": model_id,
-            "model": model_id,
-            "modified_at": "2023-10-01T00:00:00Z",
-            "size": 815319791,
-            "digest": "8648f39daa8fbf5b18c7b4e6a8fb4990c692751d49917417b8842ca5758e7ffc",
-            "details": {
-                "parent_model": "",
-                "format": "gguf",
-                "family": "llama",
-                "families": ["llama"],
-                "parameter_size": "8.0B",
-                "quantization_level": "Q4_0",
-            },
-        }
+    expose_variants = bool(current_app.config.get("EXPOSE_REASONING_MODELS"))
+    model_ids = [
+        "gpt-5",
+        *(
+            [
+                "gpt-5-high",
+                "gpt-5-medium",
+                "gpt-5-low",
+                "gpt-5-minimal",
+            ]
+            if expose_variants
+            else []
+        ),
     ]
+    models = []
+    for model_id in model_ids:
+        models.append(
+            {
+                "name": model_id,
+                "model": model_id,
+                "modified_at": "2023-10-01T00:00:00Z",
+                "size": 815319791,
+                "digest": "8648f39daa8fbf5b18c7b4e6a8fb4990c692751d49917417b8842ca5758e7ffc",
+                "details": {
+                    "parent_model": "",
+                    "format": "gguf",
+                    "family": "llama",
+                    "families": ["llama"],
+                    "parameter_size": "8.0B",
+                    "quantization_level": "Q4_0",
+                },
+            }
+        )
     resp = make_response(jsonify({"models": models}), 200)
     for k, v in build_cors_headers().items():
         resp.headers.setdefault(k, v)
@@ -137,6 +152,8 @@ def ollama_chat() -> Response:
 
     input_items = convert_chat_messages_to_responses_input(messages)
 
+    # Infer effort from model variant (gpt-5-high, etc.) but send base model upstream
+    model_reasoning = extract_reasoning_from_model_name(model)
     upstream, error_resp = start_upstream_request(
         normalize_model_name(model),
         input_items,
@@ -144,7 +161,7 @@ def ollama_chat() -> Response:
         tools=tools_responses,
         tool_choice=tool_choice,
         parallel_tool_calls=parallel_tool_calls,
-        reasoning_param=build_reasoning_param(reasoning_effort, reasoning_summary, None),
+        reasoning_param=build_reasoning_param(reasoning_effort, reasoning_summary, model_reasoning),
     )
     if error_resp is not None:
         return error_resp
@@ -162,7 +179,7 @@ def ollama_chat() -> Response:
         )
 
     created_at = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-    model_out = normalize_model_name(model)
+    model_out = model if isinstance(model, str) and model.strip() else normalize_model_name(model)
 
     if stream_req:
         def _gen():

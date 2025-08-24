@@ -14,6 +14,7 @@ def create_app(
     reasoning_summary: str = "auto",
     reasoning_compat: str = "think-tags",
     debug_model: str | None = None,
+    expose_reasoning_models: bool = False,
 ) -> Flask:
     app = Flask(__name__)
 
@@ -24,6 +25,7 @@ def create_app(
         REASONING_COMPAT=reasoning_compat,
         DEBUG_MODEL=debug_model,
         BASE_INSTRUCTIONS=BASE_INSTRUCTIONS,
+        EXPOSE_REASONING_MODELS=bool(expose_reasoning_models),
     )
 
     @app.get("/")
@@ -41,4 +43,3 @@ def create_app(
     app.register_blueprint(ollama_bp)
 
     return app
-

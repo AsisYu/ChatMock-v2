@@ -20,6 +20,13 @@ def normalize_model_name(name: str | None, debug_model: str | None = None) -> st
     if not isinstance(name, str) or not name.strip():
         return "gpt-5"
     base = name.split(":", 1)[0].strip()
+    for sep in ("-", "_"):
+        lowered = base.lower()
+        for effort in ("minimal", "low", "medium", "high"):
+            suffix = f"{sep}{effort}"
+            if lowered.endswith(suffix):
+                base = base[: -len(suffix)]
+                break
     mapping = {
         "gpt5": "gpt-5",
         "gpt-5-latest": "gpt-5",

@@ -8,7 +8,7 @@ from flask import Blueprint, Response, current_app, jsonify, make_response, requ
 
 from .config import BASE_INSTRUCTIONS
 from .http import build_cors_headers
-from .reasoning import apply_reasoning_to_message, build_reasoning_param
+from .reasoning import apply_reasoning_to_message, build_reasoning_param, extract_reasoning_from_model_name
 from .upstream import normalize_model_name, start_upstream_request
 from .utils import (
     convert_chat_messages_to_responses_input,
@@ -45,7 +45,8 @@ def chat_completions() -> Response:
         except Exception:
             return jsonify({"error": {"message": "Invalid JSON body"}}), 400
 
-    model = normalize_model_name(payload.get("model"), debug_model)
+    requested_model = payload.get("model")
+    model = normalize_model_name(requested_model, debug_model)
     messages = payload.get("messages")
     if messages is None and isinstance(payload.get("prompt"), str):
         messages = [{"role": "user", "content": payload.get("prompt") or ""}]
@@ -76,7 +77,8 @@ def chat_completions() -> Response:
             {"type": "message", "role": "user", "content": [{"type": "input_text", "text": payload.get("prompt")}]}
         ]
 
-    reasoning_overrides = payload.get("reasoning") if isinstance(payload.get("reasoning"), dict) else None
+    model_reasoning = extract_reasoning_from_model_name(requested_model)
+    reasoning_overrides = payload.get("reasoning") if isinstance(payload.get("reasoning"), dict) else model_reasoning
     reasoning_param = build_reasoning_param(reasoning_effort, reasoning_summary, reasoning_overrides)
 
     upstream, error_resp = start_upstream_request(
@@ -109,7 +111,7 @@ def chat_completions() -> Response:
         resp = Response(
             sse_translate_chat(
                 upstream,
-                model,
+                requested_model or model,
                 created,
                 verbose=verbose,
                 vlog=print if verbose else None,
@@ -206,7 +208,7 @@ def chat_completions() -> Response:
         "id": response_id or "chatcmpl",
         "object": "chat.completion",
         "created": created,
-        "model": model,
+        "model": requested_model or model,
         "choices": [
             {
                 "index": 0,
@@ -235,7 +237,8 @@ def completions() -> Response:
     except Exception:
         return jsonify({"error": {"message": "Invalid JSON body"}}), 400
 
-    model = normalize_model_name(payload.get("model"), debug_model)
+    requested_model = payload.get("model")
+    model = normalize_model_name(requested_model, debug_model)
     prompt = payload.get("prompt")
     if isinstance(prompt, list):
         prompt = "".join([p if isinstance(p, str) else "" for p in prompt])
@@ -248,7 +251,8 @@ def completions() -> Response:
     messages = [{"role": "user", "content": prompt or ""}]
     input_items = convert_chat_messages_to_responses_input(messages)
 
-    reasoning_overrides = payload.get("reasoning") if isinstance(payload.get("reasoning"), dict) else None
+    model_reasoning = extract_reasoning_from_model_name(requested_model)
+    reasoning_overrides = payload.get("reasoning") if isinstance(payload.get("reasoning"), dict) else model_reasoning
     reasoning_param = build_reasoning_param(reasoning_effort, reasoning_summary, reasoning_overrides)
     upstream, error_resp = start_upstream_request(
         model,
@@ -274,7 +278,7 @@ def completions() -> Response:
         resp = Response(
             sse_translate_text(
                 upstream,
-                model,
+                requested_model or model,
                 created,
                 verbose=verbose,
                 vlog=(print if verbose else None),
@@ -335,7 +339,7 @@ def completions() -> Response:
         "id": response_id or "cmpl",
         "object": "text_completion",
         "created": created,
-        "model": model,
+        "model": requested_model or model,
         "choices": [
             {"index": 0, "text": full_text, "finish_reason": "stop", "logprobs": None}
         ],
@@ -349,7 +353,20 @@ def completions() -> Response:
 
 @openai_bp.route("/v1/models", methods=["GET"])
 def list_models() -> Response:
-    models = {"object": "list", "data": [{"id": "gpt-5", "object": "model", "owned_by": "owner"}]}
+    expose_variants = bool(current_app.config.get("EXPOSE_REASONING_MODELS"))
+    data = []
+    if expose_variants:
+        variant_ids = [
+            "gpt-5",
+            "gpt-5-high",
+            "gpt-5-medium",
+            "gpt-5-low",
+            "gpt-5-minimal",
+        ]
+        data = [{"id": mid, "object": "model", "owned_by": "owner"} for mid in variant_ids]
+    else:
+        data = [{"id": "gpt-5", "object": "model", "owned_by": "owner"}]
+    models = {"object": "list", "data": data}
     resp = make_response(jsonify(models), 200)
     for k, v in build_cors_headers().items():
         resp.headers.setdefault(k, v)
