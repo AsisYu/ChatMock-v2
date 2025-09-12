@@ -39,6 +39,47 @@ def cmd_login(no_browser: bool, verbose: bool) -> int:
             except Exception as e:
                 eprint(f"Failed to open browser: {e}")
         eprint(f"If your browser did not open, navigate to:\n{auth_url}")
+
+        def _stdin_paste_worker() -> None:
+            try:
+                eprint(
+                    "If the browser can't reach this machine, paste the full redirect URL here and press Enter (or leave blank to keep waiting):"
+                )
+                line = sys.stdin.readline().strip()
+                if not line:
+                    return
+                try:
+                    from urllib.parse import urlparse, parse_qs
+
+                    parsed = urlparse(line)
+                    params = parse_qs(parsed.query)
+                    code = (params.get("code") or [None])[0]
+                    state = (params.get("state") or [None])[0]
+                    if not code:
+                        eprint("Input did not contain an auth code. Ignoring.")
+                        return
+                    if state and state != httpd.state:
+                        eprint("State mismatch. Ignoring pasted URL for safety.")
+                        return
+                    eprint("Received redirect URL. Completing login without callback…")
+                    bundle, _ = httpd.exchange_code(code)
+                    if httpd.persist_auth(bundle):
+                        httpd.exit_code = 0
+                        eprint("Login successful. Tokens saved.")
+                    else:
+                        eprint("ERROR: Unable to persist auth file.")
+                    httpd.shutdown()
+                except Exception as exc:
+                    eprint(f"Failed to process pasted redirect URL: {exc}")
+            except Exception:
+                pass
+
+        try:
+            import threading
+
+            threading.Thread(target=_stdin_paste_worker, daemon=True).start()
+        except Exception:
+            pass
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:

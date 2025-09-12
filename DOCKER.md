@@ -10,7 +10,8 @@
 3) Login:
    docker compose run --rm --service-ports chatmock-login login
    - The command prints an auth URL, copy paste it into your browser.
-   - Server should stop automatically once it recieves the tokens and they are saved.
+   - If your browser cannot reach the container's localhost callback, copy the full redirect URL from the browser address bar and paste it back into the terminal when prompted.
+   - Server should stop automatically once it receives the tokens and they are saved.
 
 4) Start the server:
    docker compose up -d chatmock
