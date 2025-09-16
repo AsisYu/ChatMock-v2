@@ -51,7 +51,12 @@ python chatmock.py serve
 ```
 Then, you can simply use the address and port as the baseURL as you require (http://127.0.0.1:8000 by default)
 
-**Reminder:** When setting a baseURL, make you sure you include /v1/ at the end of the URL if you're using this as a OpenAI compatible endpoint (e.g http://127.0.0.1:8000/v1)
+**Reminder:** When setting a baseURL in other applications, make you sure you include /v1/ at the end of the URL if you're using this as a OpenAI compatible endpoint (e.g http://127.0.0.1:8000/v1)
+
+### Docker
+
+Read [the docker instrunctions here](https://github.com/RayBytes/ChatMock/blob/main/DOCKER.md)
+
 
 # Examples
 
@@ -84,10 +89,6 @@ curl http://127.0.0.1:8000/v1/chat/completions \
     "messages": [{"role":"user","content":"hello world"}]
   }'
 ```
-
-### Docker
-
-Read [the docker instrunctions here](https://github.com/RayBytes/ChatMock/blob/main/DOCKER.md)
 
 # What's supported
 
