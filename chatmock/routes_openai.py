@@ -70,6 +70,47 @@ def chat_completions() -> Response:
     tools_responses = convert_tools_chat_to_responses(payload.get("tools"))
     tool_choice = payload.get("tool_choice", "auto")
     parallel_tool_calls = bool(payload.get("parallel_tool_calls", False))
+    responses_tools_payload = payload.get("responses_tools") if isinstance(payload.get("responses_tools"), list) else []
+    extra_tools: List[Dict[str, Any]] = []
+    had_responses_tools = False
+    if isinstance(responses_tools_payload, list):
+        for _t in responses_tools_payload:
+            if not (isinstance(_t, dict) and isinstance(_t.get("type"), str)):
+                continue
+            if _t.get("type") not in ("web_search", "web_search_preview"):
+                return (
+                    jsonify(
+                        {
+                            "error": {
+                                "message": "Only web_search/web_search_preview are supported in responses_tools",
+                                "code": "RESPONSES_TOOL_UNSUPPORTED",
+                            }
+                        }
+                    ),
+                    400,
+                )
+            extra_tools.append(_t)
+
+        if not extra_tools and bool(current_app.config.get("DEFAULT_WEB_SEARCH")):
+            responses_tool_choice = payload.get("responses_tool_choice")
+            if not (isinstance(responses_tool_choice, str) and responses_tool_choice == "none"):
+                extra_tools = [{"type": "web_search"}]
+
+        if extra_tools:
+            import json as _json
+            MAX_TOOLS_BYTES = 32768
+            try:
+                size = len(_json.dumps(extra_tools))
+            except Exception:
+                size = 0
+            if size > MAX_TOOLS_BYTES:
+                return jsonify({"error": {"message": "responses_tools too large", "code": "RESPONSES_TOOLS_TOO_LARGE"}}), 400
+            had_responses_tools = True
+            tools_responses = (tools_responses or []) + extra_tools
+
+    responses_tool_choice = payload.get("responses_tool_choice")
+    if isinstance(responses_tool_choice, str) and responses_tool_choice in ("auto", "none"):
+        tool_choice = responses_tool_choice
 
     input_items = convert_chat_messages_to_responses_input(messages)
     if not input_items and isinstance(payload.get("prompt"), str) and payload.get("prompt").strip():
@@ -100,12 +141,41 @@ def chat_completions() -> Response:
             err_body = json.loads(raw.decode("utf-8", errors="ignore")) if raw else {"raw": upstream.text}
         except Exception:
             err_body = {"raw": upstream.text}
-        if verbose:
-            print("Upstream error status=", upstream.status_code, " body:", json.dumps(err_body)[:2000])
-        return (
-            jsonify({"error": {"message": (err_body.get("error", {}) or {}).get("message", "Upstream error")}}),
-            upstream.status_code,
-        )
+        if had_responses_tools:
+            if verbose:
+                print("[Passthrough] Upstream rejected tools; retrying without extra tools (args redacted)")
+            base_tools_only = convert_tools_chat_to_responses(payload.get("tools"))
+            safe_choice = payload.get("tool_choice", "auto")
+            upstream2, err2 = start_upstream_request(
+                model,
+                input_items,
+                instructions=BASE_INSTRUCTIONS,
+                tools=base_tools_only,
+                tool_choice=safe_choice,
+                parallel_tool_calls=parallel_tool_calls,
+                reasoning_param=reasoning_param,
+            )
+            if err2 is None and upstream2 is not None and upstream2.status_code < 400:
+                upstream = upstream2
+            else:
+                return (
+                    jsonify(
+                        {
+                            "error": {
+                                "message": (err_body.get("error", {}) or {}).get("message", "Upstream error"),
+                                "code": "RESPONSES_TOOLS_REJECTED",
+                            }
+                        }
+                    ),
+                    (upstream2.status_code if upstream2 is not None else upstream.status_code),
+                )
+        else:
+            if verbose:
+                print("Upstream error status=", upstream.status_code)
+            return (
+                jsonify({"error": {"message": (err_body.get("error", {}) or {}).get("message", "Upstream error")}}),
+                upstream.status_code,
+            )
 
     if is_stream:
         resp = Response(
@@ -371,3 +441,4 @@ def list_models() -> Response:
     for k, v in build_cors_headers().items():
         resp.headers.setdefault(k, v)
     return resp
+

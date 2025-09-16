@@ -114,19 +114,37 @@ GPT-5 has a configurable amount of "effort" it can put into thinking, which may 
 - `--reasoning-summary` (choice of auto,concise,detailed,none)<br>
 Models like GPT-5 do not return raw thinking content, but instead return thinking summaries. These can also be customised by you.
 
+### OpenAI Tools
+
+You can also access OpenAI tools through this project. Currently, only web search is available.
+You can enable it by starting the server with `--enable-web-search`, which will allow OpenAI to determine when a request requires a web search, or you can use the following parameters during a request to enable web search:
+
+- `responses_tools`: supports `[{"type":"web_search"}]` / `{ "type": "web_search_preview" }`
+- `responses_tool_choice`: `"auto"` or `"none"`
+
+### Example usage
+```json
+{
+  "model": "gpt-5",
+  "messages": [{"role":"user","content":"Find current METAR rules"}],
+  "stream": true,
+  "responses_tools": [{"type": "web_search"}],
+  "responses_tool_choice": "auto"
+}
+```
+
 ## Notes
-If you wish to have the fastest responses, I'd recommend setting `--reasoning-effort` to low, and `--reasoning-summary` to none.
+If you wish to have the fastest responses, I'd recommend setting `--reasoning-effort` to minimal, and `--reasoning-summary` to none. <br>
 All parameters and choices can be seen by sending `python chatmock.py serve --h`<br>
-The context size of this route is also larger than what you get access to in the regular ChatGPT app.
+The context size of this route is also larger than what you get access to in the regular ChatGPT app.<br>
 
-**When the model returns a thinking summary, the model will send back thinking tags to make it compatible with chat apps. If you don't like this behavior, you can instead set `--reasoning-compat` to legacy, and reasoning will be set in the reasoning tag instead of being returned in the actual response text.**
+When the model returns a thinking summary, the model will send back thinking tags to make it compatible with chat apps. **If you don't like this behavior, you can instead set `--reasoning-compat` to legacy, and reasoning will be set in the reasoning tag instead of being returned in the actual response text.**
 
-# TODO
-- ~~Implement Ollama support~~ ✅
-- Explore to see if we can make more model settings accessible
-- Implement analytics (token counting, etc, to track usage)
 
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=RayBytes/ChatMock&type=Timeline)](https://www.star-history.com/#RayBytes/ChatMock&Timeline)
+
+
+
 
