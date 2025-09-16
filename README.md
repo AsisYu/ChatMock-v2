@@ -57,7 +57,6 @@ Then, you can simply use the address and port as the baseURL as you require (htt
 
 Read [the docker instrunctions here](https://github.com/RayBytes/ChatMock/blob/main/DOCKER.md)
 
-
 # Examples
 
 ### Python 
@@ -122,13 +121,14 @@ Models like GPT-5 do not return raw thinking content, but instead return thinkin
 
 ### OpenAI Tools
 
+- `--enable-web-search`
 You can also access OpenAI tools through this project. Currently, only web search is available.
-You can enable it by starting the server with `--enable-web-search`, which will allow OpenAI to determine when a request requires a web search, or you can use the following parameters during a request to enable web search:
+You can enable it by starting the server with this parameter, which will allow OpenAI to determine when a request requires a web search, or you can use the following parameters during a request to the API to enable web search:
 
 - `responses_tools`: supports `[{"type":"web_search"}]` / `{ "type": "web_search_preview" }`
 - `responses_tool_choice`: `"auto"` or `"none"`
 
-### Example usage
+#### Example usage
 ```json
 {
   "model": "gpt-5",
@@ -138,6 +138,11 @@ You can enable it by starting the server with `--enable-web-search`, which will 
   "responses_tool_choice": "auto"
 }
 ```
+
+### Expose reasoning models
+
+- `--expose-reasoning-models`
+If your preferred app doesn’t support selecting reasoning effort, or you just want a simpler approach, this parameter exposes each reasoning level as a separate, queryable model. Each reasoning level also appears individually under ⁠/v1/models, so model pickers in your favorite chat apps will list all reasoning options as distinct models you can switch between.
 
 ## Notes
 If you wish to have the fastest responses, I'd recommend setting `--reasoning-effort` to minimal, and `--reasoning-summary` to none. <br>
