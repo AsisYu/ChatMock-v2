@@ -85,16 +85,20 @@ curl http://127.0.0.1:8000/v1/chat/completions \
   }'
 ```
 
+### Docker
+
+Read [the docker instrunctions here](https://github.com/RayBytes/ChatMock/blob/main/DOCKER.md)
+
 # What's supported
 
-- Tool calling
+- Tool/Function calling 
 - Vision/Image understanding
 - Thinking summaries (through thinking tags)
+- Thinking effort
 
 ## Notes & Limits
 
 - Requires an active, paid ChatGPT account.
-- Expect lower rate limits than what you may recieve in the ChatGPT app.
 - Some context length might be taken up by internal instructions (but they dont seem to degrade the model) 
 - Use responsibly and at your own risk. This project is not affiliated with OpenAI, and is a educational exercise.
 
