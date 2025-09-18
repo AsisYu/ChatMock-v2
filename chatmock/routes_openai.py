@@ -436,6 +436,7 @@ def list_models() -> Response:
     model_groups = [
         ("gpt-5", ["high", "medium", "low", "minimal"]),
         ("gpt-5-codex", ["high", "medium", "low"]),
+        ("codex-mini", []),
     ]
     model_ids: List[str] = []
     for base, efforts in model_groups:
