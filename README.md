@@ -135,7 +135,7 @@ Models like GPT-5 do not return raw thinking content, but instead return thinkin
 You can also access OpenAI tools through this project. Currently, only web search is available.
 You can enable it by starting the server with this parameter, which will allow OpenAI to determine when a request requires a web search, or you can use the following parameters during a request to the API to enable web search:
 <br><br>
-`responses_tools`: supports `[{"type":"web_search"}]` / `{ "type": "web_search_preview" }`
+`responses_tools`: supports `[{"type":"web_search"}]` / `{ "type": "web_search_preview" }`<br>
 `responses_tool_choice`: `"auto"` or `"none"`
 
 #### Example usage
@@ -151,7 +151,7 @@ You can enable it by starting the server with this parameter, which will allow O
 
 ### Expose reasoning models
 
-- `--expose-reasoning-models`
+- `--expose-reasoning-models`<br>
 If your preferred app doesn’t support selecting reasoning effort, or you just want a simpler approach, this parameter exposes each reasoning level as a separate, queryable model. Each reasoning level also appears individually under ⁠/v1/models, so model pickers in your favorite chat apps will list all reasoning options as distinct models you can switch between.
 
 ## Notes
