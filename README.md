@@ -135,9 +135,9 @@ Models like GPT-5 do not return raw thinking content, but instead return thinkin
 You can also access OpenAI tools through this project. Currently, only web search is available.
 You can enable it by starting the server with this parameter, which will allow OpenAI to determine when a request requires a web search, or you can use the following parameters during a request to the API to enable web search:
 <br><br>
-- `responses_tools`: supports `[{"type":"web_search"}]` / `{ "type": "web_search_preview" }`
-- `responses_tool_choice`: `"auto"` or `"none"`
-<br>
+`responses_tools`: supports `[{"type":"web_search"}]` / `{ "type": "web_search_preview" }`
+`responses_tool_choice`: `"auto"` or `"none"`
+
 #### Example usage
 ```json
 {
