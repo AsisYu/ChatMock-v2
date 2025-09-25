@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 from flask import Blueprint, Response, current_app, jsonify, make_response, request
 
 from .config import BASE_INSTRUCTIONS, GPT5_CODEX_INSTRUCTIONS
+from .limits import record_rate_limits_from_response
 from .http import build_cors_headers
 from .reasoning import apply_reasoning_to_message, build_reasoning_param, extract_reasoning_from_model_name
 from .upstream import normalize_model_name, start_upstream_request
@@ -143,6 +144,8 @@ def chat_completions() -> Response:
     if error_resp is not None:
         return error_resp
 
+    record_rate_limits_from_response(upstream)
+
     created = int(time.time())
     if upstream.status_code >= 400:
         try:
@@ -164,6 +167,7 @@ def chat_completions() -> Response:
                 parallel_tool_calls=parallel_tool_calls,
                 reasoning_param=reasoning_param,
             )
+            record_rate_limits_from_response(upstream2)
             if err2 is None and upstream2 is not None and upstream2.status_code < 400:
                 upstream = upstream2
             else:
@@ -341,6 +345,8 @@ def completions() -> Response:
     )
     if error_resp is not None:
         return error_resp
+
+    record_rate_limits_from_response(upstream)
 
     created = int(time.time())
     if upstream.status_code >= 400:
