@@ -13,13 +13,14 @@ from typing import Any, Dict, Tuple
 
 import certifi
 
+from .config import OAUTH_ISSUER_DEFAULT
 from .models import AuthBundle, PkceCodes, TokenData
 from .utils import eprint, generate_pkce, parse_jwt_claims, write_auth_file
 
 
 REQUIRED_PORT = 1455
 URL_BASE = f"http://localhost:{REQUIRED_PORT}"
-DEFAULT_ISSUER = "https://auth.openai.com"
+DEFAULT_ISSUER = OAUTH_ISSUER_DEFAULT
 
 
 LOGIN_SUCCESS_HTML = """<!DOCTYPE html>
