@@ -31,12 +31,15 @@ def normalize_model_name(name: str | None, debug_model: str | None = None) -> st
         "gpt5": "gpt-5",
         "gpt-5-latest": "gpt-5",
         "gpt-5": "gpt-5",
+        "gpt-5.1": "gpt-5.1",
         "gpt5-codex": "gpt-5-codex",
         "gpt-5-codex": "gpt-5-codex",
         "gpt-5-codex-latest": "gpt-5-codex",
+        "gpt-5.1-codex": "gpt-5.1-codex",
         "codex": "codex-mini-latest",
         "codex-mini": "codex-mini-latest",
         "codex-mini-latest": "codex-mini-latest",
+        "gpt-5.1-codex-mini": "gpt-5.1-codex-mini",
     }
     return mapping.get(base, base)
 
