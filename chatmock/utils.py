@@ -293,7 +293,7 @@ def _refresh_chatgpt_tokens(refresh_token: str, client_id: str) -> Optional[Dict
         "grant_type": "refresh_token",
         "refresh_token": refresh_token,
         "client_id": client_id,
-        "scope": "openid profile email",
+        "scope": "openid profile email offline_access",
     }
 
     try:
