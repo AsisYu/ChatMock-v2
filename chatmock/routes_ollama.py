@@ -480,7 +480,7 @@ def ollama_chat() -> Response:
                 done_obj = {
                     "model": model_out,
                     "created_at": created_at,
-                    "message": {"role": "assistant", "content": "".join(full_parts)},
+                    "message": {"role": "assistant", "content": ""},
                     "done": True,
                 }
                 done_obj.update(_OLLAMA_FAKE_EVAL)
