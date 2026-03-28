@@ -231,6 +231,28 @@ class OAuthHandler(http.server.BaseHTTPRequestHandler):
             self._shutdown()
             return
 
+        # Check if we have a v2 pool format - add to pool instead of overwriting
+        try:
+            from .pool_manager import get_pool_service
+            pool_service = get_pool_service()
+
+            # If pool has accounts, add new account to pool (v2 format)
+            if pool_service.pool.accounts:
+                account = pool_service.add_account_from_oauth(
+                    id_token=auth_bundle.token_data.id_token,
+                    access_token=auth_bundle.token_data.access_token,
+                    refresh_token=auth_bundle.token_data.refresh_token,
+                    replace_existing=True,
+                )
+                eprint(f"[pool] Account '{account.alias}' ({account.id}) added successfully.")
+                self.server.exit_code = 0
+                self._send_html(LOGIN_SUCCESS_HTML)
+                self._shutdown_after_delay(2.0)
+                return
+        except Exception as exc:
+            eprint(f"WARNING: Failed to add to pool, falling back to single-account mode: {exc}")
+
+        # Fallback: write v1 format (single account mode or pool not available)
         auth_json_contents = {
             "OPENAI_API_KEY": auth_bundle.api_key,
             "tokens": {

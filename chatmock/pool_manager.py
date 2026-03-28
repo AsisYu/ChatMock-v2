@@ -1110,8 +1110,14 @@ class PoolService:
         if existing:
             if not replace_existing:
                 raise ValueError(f"Account {account_id} already exists in pool")
-            # Remove the previous record before inserting the refreshed tokens.
-            self.pool.remove_account(account_id)
+            # Update tokens while preserving metadata (alias, priority, etc.)
+            self.update_account_tokens(
+                account_id=account_id,
+                id_token=id_token,
+                access_token=access_token,
+                refresh_token=refresh_token,
+            )
+            return self.pool.get_account_by_id(account_id) or existing
 
         # Create alias if not provided
         if not alias:

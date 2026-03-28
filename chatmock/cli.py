@@ -239,6 +239,28 @@ def cmd_login(no_browser: bool, verbose: bool) -> int:
                         return
                     eprint("Received redirect URL. Completing login without callback…")
                     bundle, _ = httpd.exchange_code(code)
+
+                    # Use same pool-aware logic as OAuth callback
+                    try:
+                        from .pool_manager import get_pool_service
+                        pool_service = get_pool_service()
+
+                        # If pool has accounts, add to pool (v2 format)
+                        if pool_service.pool.accounts:
+                            account = pool_service.add_account_from_oauth(
+                                id_token=bundle.token_data.id_token,
+                                access_token=bundle.token_data.access_token,
+                                refresh_token=bundle.token_data.refresh_token,
+                                replace_existing=True,
+                            )
+                            eprint(f"[pool] Account '{account.alias}' ({account.id}) added successfully.")
+                            httpd.exit_code = 0
+                            httpd.shutdown()
+                            return
+                    except Exception as exc:
+                        eprint(f"WARNING: Failed to add to pool, falling back to single-account mode: {exc}")
+
+                    # Fallback: write v1 format
                     if httpd.persist_auth(bundle):
                         httpd.exit_code = 0
                         eprint("Login successful. Tokens saved.")
@@ -268,10 +290,23 @@ def cmd_login(no_browser: bool, verbose: bool) -> int:
 
 
 def _sync_auth_file_into_pool() -> None:
-    """Import the latest login tokens into the account pool."""
+    """
+    Import the latest login tokens into the account pool.
+
+    This is only called when the auth file is in v1 format (single account mode).
+    If the file is already v2 format, the account was already added in oauth.py.
+    """
     auth = read_auth_file()
     if not isinstance(auth, dict):
         return
+
+    # If already v2 format, account was added in oauth.py - nothing to do
+    version = auth.get("version", "1.0")
+    if version == "2.0":
+        # Already a pool format, the account was added during OAuth callback
+        return
+
+    # v1 format: migrate to pool
     tokens = auth.get("tokens")
     if not isinstance(tokens, dict):
         return
