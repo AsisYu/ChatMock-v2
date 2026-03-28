@@ -31,7 +31,13 @@ from .session import (
     note_responses_stream_event,
     prepare_responses_request_for_session,
 )
-from .upstream import normalize_model_name, start_upstream_raw_request, start_upstream_request
+from .upstream import (
+    normalize_model_name,
+    start_upstream_raw_request,
+    start_upstream_request,
+    record_pool_request_failure,
+)
+from .pool_manager import RateLimitError, AuthenticationError
 from .utils import (
     convert_chat_messages_to_responses_input,
     convert_tools_chat_to_responses,
@@ -249,6 +255,21 @@ def chat_completions() -> Response:
             err_body = json.loads(raw.decode("utf-8", errors="ignore")) if raw else {"raw": upstream.text}
         except Exception:
             err_body = {"raw": upstream.text}
+
+        # Record pool failure based on status code
+        if upstream.status_code == 429:
+            # Rate limit - try to extract reset_after from headers
+            reset_after = None
+            try:
+                reset_after = int(upstream.headers.get("x-codex-primary-reset-after-seconds", 0)) or None
+            except (TypeError, ValueError):
+                pass
+            record_pool_request_failure(RateLimitError("Rate limit exceeded", reset_after), reset_after)
+        elif upstream.status_code == 401:
+            record_pool_request_failure(AuthenticationError("Authentication failed"))
+        else:
+            record_pool_request_failure(Exception(f"Upstream error: {upstream.status_code}"))
+
         if had_responses_tools:
             if verbose:
                 print("[Passthrough] Upstream rejected tools; retrying without extra tools (args redacted)")

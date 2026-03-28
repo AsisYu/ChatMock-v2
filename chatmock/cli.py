@@ -13,6 +13,7 @@ from .config import CLIENT_ID_DEFAULT
 from .limits import RateLimitWindow, compute_reset_at, load_rate_limit_snapshot
 from .oauth import OAuthHTTPServer, OAuthHandler, REQUIRED_PORT, URL_BASE
 from .utils import eprint, get_home_dir, load_chatgpt_tokens, parse_jwt_claims, read_auth_file
+from .pool_manager import get_pool_service, AccountStatus
 
 
 _STATUS_LIMIT_BAR_SEGMENTS = 30
@@ -193,6 +194,9 @@ def cmd_login(no_browser: bool, verbose: bool) -> int:
         eprint("ERROR: No OAuth client id configured. Set CHATGPT_LOCAL_CLIENT_ID.")
         return 1
 
+    # Preload pool service so we can merge new tokens into the in-memory pool snapshot.
+    get_pool_service()
+
     try:
         bind_host = os.getenv("CHATGPT_LOCAL_LOGIN_BIND", "127.0.0.1")
         httpd = OAuthHTTPServer((bind_host, REQUIRED_PORT), OAuthHandler, home_dir=home_dir, client_id=client_id, verbose=verbose)
@@ -256,7 +260,38 @@ def cmd_login(no_browser: bool, verbose: bool) -> int:
             httpd.serve_forever()
         except KeyboardInterrupt:
             eprint("\nKeyboard interrupt received, exiting.")
-        return httpd.exit_code
+        exit_code = httpd.exit_code
+
+    if exit_code == 0:
+        _sync_auth_file_into_pool()
+    return exit_code
+
+
+def _sync_auth_file_into_pool() -> None:
+    """Import the latest login tokens into the account pool."""
+    auth = read_auth_file()
+    if not isinstance(auth, dict):
+        return
+    tokens = auth.get("tokens")
+    if not isinstance(tokens, dict):
+        return
+
+    id_token = tokens.get("id_token")
+    access_token = tokens.get("access_token")
+    refresh_token = tokens.get("refresh_token")
+    if not (isinstance(id_token, str) and isinstance(access_token, str) and isinstance(refresh_token, str)):
+        return
+
+    try:
+        account = get_pool_service().add_account_from_oauth(
+            id_token=id_token,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            replace_existing=True,
+        )
+        eprint(f"[pool] Account '{account.alias}' ({account.id}) synced successfully.")
+    except Exception as exc:
+        eprint(f"WARNING: unable to sync login credentials into pool: {exc}")
 
 
 def cmd_serve(
@@ -360,6 +395,35 @@ def main() -> None:
     p_info = sub.add_parser("info", help="Print current stored tokens and derived account id")
     p_info.add_argument("--json", action="store_true", help="Output raw auth.json contents")
 
+    # Account subcommands
+    p_account = sub.add_parser("account", help="Manage accounts in the pool")
+    account_sub = p_account.add_subparsers(dest="account_command", required=True)
+
+    p_account_list = account_sub.add_parser("list", help="List all accounts")
+    p_account_list.add_argument("--json", action="store_true", help="Output as JSON")
+
+    p_account_show = account_sub.add_parser("show", help="Show account details")
+    p_account_show.add_argument("account_id", help="Account ID to show")
+
+    p_account_remove = account_sub.add_parser("remove", help="Remove an account")
+    p_account_remove.add_argument("account_id", help="Account ID to remove")
+    p_account_remove.add_argument("--force", action="store_true", help="Skip confirmation")
+
+    p_account_rename = account_sub.add_parser("rename", help="Rename account alias")
+    p_account_rename.add_argument("account_id", help="Account ID")
+    p_account_rename.add_argument("alias", help="New alias")
+
+    p_account_priority = account_sub.add_parser("priority", help="Set account priority (1=highest, 10=lowest)")
+    p_account_priority.add_argument("account_id", help="Account ID")
+    p_account_priority.add_argument("priority", type=int, help="Priority (1-10)")
+
+    # Pool subcommands
+    p_pool = sub.add_parser("pool", help="Manage the account pool")
+    pool_sub = p_pool.add_subparsers(dest="pool_command", required=True)
+
+    p_pool_status = pool_sub.add_parser("status", help="Show pool status")
+    p_pool_status.add_argument("--json", action="store_true", help="Output as JSON")
+
     args = parser.parse_args()
 
     if args.command == "login":
@@ -417,8 +481,127 @@ def main() -> None:
         print("")
         _print_usage_limits_block()
         sys.exit(0)
+    elif args.command == "account":
+        _handle_account_command(args)
+    elif args.command == "pool":
+        _handle_pool_command(args)
     else:
         parser.error("Unknown command")
+
+
+def _handle_account_command(args) -> None:
+    """Handle account subcommands."""
+    pool_service = get_pool_service()
+
+    if args.account_command == "list":
+        accounts = pool_service.list_accounts()
+        if getattr(args, "json", False):
+            print(json.dumps(accounts, indent=2))
+            return
+
+        if not accounts:
+            print("No accounts in pool. Run 'chatmock login' to add one.")
+            return
+
+        print("📋 Accounts in Pool\n")
+        print(f"{'ID':<20} {'Alias':<20} {'Status':<10} {'Priority':<8} {'Usage':<8}")
+        print("-" * 70)
+        for acc in accounts:
+            status = acc.get("status", "unknown")
+            status_color = {
+                "active": "\033[92m",
+                "ready": "\033[92m",
+                "cooldown": "\033[93m",
+                "error": "\033[91m",
+            }.get(status, "")
+            reset = "\033[0m"
+            usage = acc.get("usage_percent", 0)
+            print(f"{acc['id'][:18]:<20} {acc['alias']:<20} {status_color}{status:<10}{reset} {acc.get('priority', 5):<8} {usage:.1f}%")
+
+    elif args.account_command == "show":
+        account = pool_service.get_account_info(args.account_id)
+        if not account:
+            print(f"Account '{args.account_id}' not found.")
+            sys.exit(1)
+
+        print(f"📋 Account: {account.get('alias', args.account_id)}\n")
+        print(f"  ID:              {account.get('id')}")
+        print(f"  Alias:           {account.get('alias')}")
+        print(f"  Status:          {account.get('status')}")
+        print(f"  Priority:        {account.get('priority')}")
+        print(f"  Usage:           {account.get('usage_percent', 0):.1f}%")
+        print(f"  Remaining:       {account.get('remaining_percent', 100):.1f}%")
+
+        if account.get("cooldown_remaining"):
+            print(f"  Cooldown:        {account.get('cooldown_remaining')}")
+
+        if account.get("last_error"):
+            print(f"  Last Error:      {account.get('last_error')}")
+
+    elif args.account_command == "remove":
+        account = pool_service.get_account_info(args.account_id)
+        if not account:
+            print(f"Account '{args.account_id}' not found.")
+            sys.exit(1)
+
+        if not args.force:
+            alias = account.get("alias", args.account_id)
+            confirm = input(f"Remove account '{alias}'? [y/N]: ").strip().lower()
+            if confirm != "y":
+                print("Cancelled.")
+                return
+
+        if pool_service.remove_account(args.account_id):
+            print(f"Account '{args.account_id}' removed from pool.")
+        else:
+            print(f"Failed to remove account '{args.account_id}'.")
+            sys.exit(1)
+
+    elif args.account_command == "rename":
+        if pool_service.set_account_alias(args.account_id, args.alias):
+            print(f"Account '{args.account_id}' renamed to '{args.alias}'.")
+        else:
+            print(f"Account '{args.account_id}' not found.")
+            sys.exit(1)
+
+    elif args.account_command == "priority":
+        if not 1 <= args.priority <= 10:
+            print("Priority must be between 1 and 10.")
+            sys.exit(1)
+
+        if pool_service.set_account_priority(args.account_id, args.priority):
+            print(f"Account '{args.account_id}' priority set to {args.priority}.")
+        else:
+            print(f"Account '{args.account_id}' not found.")
+            sys.exit(1)
+
+
+def _handle_pool_command(args) -> None:
+    """Handle pool subcommands."""
+    pool_service = get_pool_service()
+
+    if args.pool_command == "status":
+        status = pool_service.get_pool_status()
+
+        if getattr(args, "json", False):
+            print(json.dumps(status, indent=2))
+            return
+
+        print("📊 Pool Status\n")
+        print(f"  Total Accounts:     {status.get('total_accounts', 0)}")
+        print(f"  Active:             {status.get('active_accounts', 0)}")
+        print(f"  Cooldown:           {status.get('cooldown_accounts', 0)}")
+        print(f"  Error:              {status.get('error_accounts', 0)}")
+
+        accounts = status.get("accounts", [])
+        if accounts:
+            print("\n📋 Accounts\n")
+            print(f"{'Alias':<20} {'Status':<10} {'Priority':<8} {'Usage':<8}")
+            print("-" * 50)
+            for acc in accounts:
+                status_str = acc.get("status", "unknown")
+                usage = acc.get("usage_percent", 0)
+                print(f"{acc.get('alias', acc.get('id', 'unknown')):<20} {status_str:<10} {acc.get('priority', 5):<8} {usage:.1f}%")
 
 
 if __name__ == "__main__":

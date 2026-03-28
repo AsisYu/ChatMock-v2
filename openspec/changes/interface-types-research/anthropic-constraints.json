@@ -1,0 +1,201 @@
+{
+  "research_topic": "ChatMock 添加 Anthropic Claude API /v1/messages 支持",
+  "generated_at": "2026-03-16",
+  "format_comparison": {
+    "anthropic_to_responses_api": {
+      "system_prompt": {
+        "anthropic": "Top-level `system` parameter",
+        "responses_api": "Top-level `instructions` parameter",
+        "mapping": "Direct mapping: system → instructions",
+        "complexity": "low"
+      },
+      "messages": {
+        "anthropic": "Array of message objects with `role` and `content`",
+        "responses_api": "Array of input items",
+        "mapping": "Role-based transformation required",
+        "complexity": "medium"
+      },
+      "content_format": {
+        "anthropic": "Content blocks: text, image, tool_use, tool_result",
+        "responses_api": "Similar but different naming",
+        "mapping": "Type-based transformation",
+        "complexity": "medium"
+      },
+      "tools": {
+        "anthropic": "`name` + `input_schema` (JSON Schema)",
+        "responses_api": "`type: function` + `function.parameters`",
+        "mapping": "Wrap in function structure, rename input_schema → parameters",
+        "complexity": "low"
+      },
+      "tool_results": {
+        "anthropic": "Content block `type: tool_result` with `tool_use_id`",
+        "responses_api": "Message with `role: tool` and `tool_call_id`",
+        "mapping": "Convert to tool role message, rename tool_use_id → tool_call_id",
+        "complexity": "medium"
+      },
+      "streaming": {
+        "anthropic": "Events: message_start, content_block_start, content_block_delta, etc.",
+        "responses_api": "Events: response.output_text.delta, response.completed, etc.",
+        "mapping": "Full event translation layer required",
+        "complexity": "high"
+      },
+      "required_params": {
+        "anthropic": ["model", "max_tokens", "messages"],
+        "responses_api": ["model", "input"],
+        "mapping": "max_tokens can be ignored or mapped to reasoning params",
+        "complexity": "low"
+      }
+    }
+  },
+  "constraint_sets": {
+    "hard_constraints": [
+      {
+        "id": "HC-ANTH-001",
+        "description": "必须新建 Flask Blueprint 处理 /v1/messages 端点",
+        "source": "现有 openai_bp 不支持 Anthropic 格式",
+        "impact": "需要创建 routes_anthropic.py"
+      },
+      {
+        "id": "HC-ANTH-002",
+        "description": "Anthropic system 参数需映射到 Responses API instructions 参数",
+        "source": "Anthropic API 规范 + upstream.py:113",
+        "impact": "系统提示词处理逻辑需要专门映射"
+      },
+      {
+        "id": "HC-ANTH-003",
+        "description": "工具定义需将 input_schema 转换为 parameters 格式",
+        "source": "Anthropic API 规范 + routes_openai.py:120-140",
+        "impact": "工具规范化需要新增逻辑"
+      },
+      {
+        "id": "HC-ANTH-004",
+        "description": "tool_result 内容块需转换为 tool role 消息",
+        "source": "Anthropic API 规范 + transform.py 模式",
+        "impact": "消息转换需要处理 tool_use_id → tool_call_id 映射"
+      },
+      {
+        "id": "HC-ANTH-005",
+        "description": "流式响应需要完整的事件翻译层",
+        "source": "Anthropic SSE 事件格式与 Responses API 不同",
+        "impact": "需要创建 sse_translate_anthropic.py"
+      },
+      {
+        "id": "HC-ANTH-006",
+        "description": "必须支持 max_tokens 必需参数 (可忽略或映射)",
+        "source": "Anthropic API 规范",
+        "impact": "请求验证需要检查必需参数"
+      },
+      {
+        "id": "HC-ANTH-007",
+        "description": "responses_tools 限制同样适用于 Anthropic 端点",
+        "source": "HC-004 约束",
+        "impact": "仅支持 web_search 类型工具"
+      }
+    ],
+    "soft_constraints": [
+      {
+        "id": "SC-ANTH-001",
+        "description": "模型名称映射可配置",
+        "config_key": "ANTHROPIC_MODEL_MAPPING",
+        "default_value": {"claude-3-opus": "gpt-5", "claude-3-sonnet": "gpt-5.1"}
+      },
+      {
+        "id": "SC-ANTH-002",
+        "description": "是否暴露 Anthropic 模型列表",
+        "config_key": "EXPOSE_ANTHROPIC_MODELS",
+        "default_value": true
+      },
+      {
+        "id": "SC-ANTH-003",
+        "description": "max_tokens 默认值",
+        "config_key": "DEFAULT_MAX_TOKENS",
+        "default_value": 4096
+      }
+    ]
+  },
+  "streaming_event_mapping": {
+    "responses_to_anthropic": [
+      {
+        "responses_event": "response.created",
+        "anthropic_event": "message_start",
+        "notes": "初始化消息对象"
+      },
+      {
+        "responses_event": "response.output_text.delta",
+        "anthropic_event": "content_block_delta",
+        "notes": "文本增量，需要包装在 content_block 结构中"
+      },
+      {
+        "responses_event": "response.tool_call",
+        "anthropic_event": "content_block_start (type: tool_use)",
+        "notes": "工具调用开始"
+      },
+      {
+        "responses_event": "response.completed",
+        "anthropic_event": "message_delta + message_stop",
+        "notes": "消息完成，需要输出 stop_reason 和 usage"
+      }
+    ]
+  },
+  "message_transformation_examples": {
+    "anthropic_request": {
+      "model": "claude-3-opus-20240229",
+      "max_tokens": 1024,
+      "system": "You are a helpful assistant.",
+      "messages": [
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "content": [{"type": "text", "text": "Hi there"}]},
+        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "toolu_01", "content": "result"}]}
+      ],
+      "tools": [{"name": "get_weather", "input_schema": {"type": "object"}}]
+    },
+    "responses_payload": {
+      "model": "gpt-5",
+      "instructions": "You are a helpful assistant.",
+      "input": [
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "content": "Hi there"},
+        {"role": "tool", "tool_call_id": "toolu_01", "content": "result"}
+      ],
+      "tools": [{"type": "function", "function": {"name": "get_weather", "parameters": {"type": "object"}}}]
+    }
+  },
+  "success_criteria": [
+    "POST /v1/messages 返回有效非流式响应",
+    "POST /v1/messages 返回有效流式 SSE 响应",
+    "system 参数正确映射到 instructions",
+    "工具定义 input_schema 正确转换为 parameters",
+    "tool_result 正确转换为 tool role 消息",
+    "流式事件正确翻译为 Anthropic 格式",
+    "错误响应符合 Anthropic API 格式",
+    "支持所有 Anthropic 内容块类型 (text, image, tool_use, tool_result)"
+  ],
+  "risks": [
+    {
+      "id": "R-ANTH-001",
+      "description": "Anthropic API 格式变更可能需要适配",
+      "severity": "medium"
+    },
+    {
+      "id": "R-ANTH-002",
+      "description": "流式事件翻译可能出现边界情况",
+      "severity": "medium"
+    },
+    {
+      "id": "R-ANTH-003",
+      "description": "模型能力差异可能导致功能不一致",
+      "severity": "low"
+    }
+  ],
+  "implementation_modules": {
+    "new_files": [
+      "chatmock/routes_anthropic.py - Flask Blueprint for /v1/messages",
+      "chatmock/transform_anthropic.py - Message format transformation",
+      "chatmock/sse_anthropic.py - SSE event translation"
+    ],
+    "modified_files": [
+      "chatmock/__init__.py - Register new blueprint",
+      "chatmock/config.py - Add Anthropic-specific config"
+    ]
+  }
+}

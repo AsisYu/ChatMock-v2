@@ -1,0 +1,159 @@
+{
+  "research_topic": "ChatMock 接口类型",
+  "generated_at": "2026-03-16",
+  "constraint_sets": {
+    "hard_constraints": [
+      {
+        "id": "HC-001",
+        "description": "上游 API 仅支持 ChatGPT Responses API 格式",
+        "source": "upstream.py:start_upstream_request()",
+        "impact": "所有请求必须转换为 Responses API 格式"
+      },
+      {
+        "id": "HC-002",
+        "description": "认证依赖 ChatGPT Plus/Pro 账户 OAuth 令牌",
+        "source": "oauth.py",
+        "impact": "需要有效 ChatGPT 账户认证"
+      },
+      {
+        "id": "HC-003",
+        "description": "流式响应使用 Server-Sent Events (SSE) 格式",
+        "source": "transform.py:sse_translate_chat()",
+        "impact": "客户端必须支持 SSE 解析"
+      },
+      {
+        "id": "HC-004",
+        "description": "responses_tools 仅支持 web_search/web_search_preview 类型",
+        "source": "routes_openai.py:120-140, routes_ollama.py:268-272",
+        "impact": "其他工具类型会被拒绝"
+      },
+      {
+        "id": "HC-005",
+        "description": "系统消息会被转换为用户消息",
+        "source": "routes_openai.py:111-115, routes_ollama.py:246-250",
+        "impact": "无法使用原生 system role"
+      }
+    ],
+    "soft_constraints": [
+      {
+        "id": "SC-001",
+        "description": "默认推理努力级别可配置",
+        "config_key": "REASONING_EFFORT",
+        "default_value": "medium"
+      },
+      {
+        "id": "SC-002",
+        "description": "推理标签输出格式可配置",
+        "config_key": "REASONING_COMPAT",
+        "default_value": "think-tags",
+        "options": ["think-tags", "raw"]
+      },
+      {
+        "id": "SC-003",
+        "description": "是否在模型列表中暴露推理变体",
+        "config_key": "EXPOSE_REASONING_MODELS",
+        "default_value": false
+      },
+      {
+        "id": "SC-004",
+        "description": "是否默认启用 Web Search",
+        "config_key": "DEFAULT_WEB_SEARCH",
+        "default_value": false
+      },
+      {
+        "id": "SC-005",
+        "description": "Ollama 版本号可自定义",
+        "config_key": "OLLAMA_VERSION",
+        "default_value": "0.12.10"
+      }
+    ]
+  },
+  "interface_inventory": {
+    "openai_api": {
+      "base_path": "/v1",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/v1/chat/completions",
+          "description": "对话补全",
+          "features": ["streaming", "tools", "reasoning", "web_search", "usage_stats"]
+        },
+        {
+          "method": "POST",
+          "path": "/v1/completions",
+          "description": "文本补全",
+          "features": ["streaming", "reasoning"]
+        },
+        {
+          "method": "GET",
+          "path": "/v1/models",
+          "description": "列出模型"
+        }
+      ]
+    },
+    "ollama_api": {
+      "base_path": "/api",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/version",
+          "description": "版本信息"
+        },
+        {
+          "method": "GET",
+          "path": "/api/tags",
+          "description": "列出模型"
+        },
+        {
+          "method": "POST",
+          "path": "/api/show",
+          "description": "模型详情"
+        },
+        {
+          "method": "POST",
+          "path": "/api/chat",
+          "description": "对话补全",
+          "features": ["streaming", "tools", "images", "web_search"]
+        }
+      ]
+    }
+  },
+  "supported_models": {
+    "gpt_family": ["gpt-5", "gpt-5.1", "gpt-5.2", "gpt-5.4"],
+    "codex_variants": ["gpt-5-codex", "gpt-5.1-codex", "gpt-5.2-codex", "gpt-5.3-codex", "gpt-5.1-codex-max", "gpt-5.1-codex-mini", "codex-mini"],
+    "reasoning_efforts": ["none", "minimal", "low", "medium", "high", "xhigh"]
+  },
+  "success_criteria": [
+    "POST /v1/chat/completions 返回有效响应",
+    "POST /v1/completions 返回有效响应",
+    "GET /v1/models 返回模型列表",
+    "GET /api/version 返回版本信息",
+    "GET /api/tags 返回模型列表",
+    "POST /api/show 返回模型详情",
+    "POST /api/chat 返回有效响应",
+    "流式响应 SSE 格式正确",
+    "工具调用正确映射和返回"
+  ],
+  "risks": [
+    {
+      "id": "R-001",
+      "description": "上游 API 变更可能导致接口失效",
+      "severity": "high"
+    },
+    {
+      "id": "R-002",
+      "description": "ChatGPT 账户被封禁",
+      "severity": "high"
+    },
+    {
+      "id": "R-003",
+      "description": "速率限制",
+      "severity": "medium"
+    },
+    {
+      "id": "R-004",
+      "description": "responses_tools 被上游拒绝",
+      "severity": "medium"
+    }
+  ]
+}

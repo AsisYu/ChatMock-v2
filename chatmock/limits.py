@@ -179,6 +179,11 @@ def _dict_to_window(value: Any) -> Optional[RateLimitWindow]:
 
 
 def record_rate_limits_from_response(response: Any) -> None:
+    """
+    Record rate limits from response headers.
+
+    Updates both the legacy limits store and the pool (if using multi-account).
+    """
     if response is None:
         return
     headers = getattr(response, "headers", None)
@@ -188,6 +193,36 @@ def record_rate_limits_from_response(response: Any) -> None:
     if snapshot is None:
         return
     store_rate_limit_snapshot(snapshot)
+
+    # Also update pool if using multi-account mode
+    try:
+        from .upstream import get_pool_account_id
+        from .pool_manager import get_pool_service, UsageInfo
+
+        internal_id = get_pool_account_id()
+        if internal_id:
+            pool_service = get_pool_service()
+
+            # Convert snapshot to UsageInfo
+            usage = UsageInfo()
+            if snapshot.primary:
+                from .pool_manager import RateLimitWindow as PoolRateLimitWindow
+                usage.primary = PoolRateLimitWindow(
+                    used_percent=snapshot.primary.used_percent,
+                    window_minutes=snapshot.primary.window_minutes,
+                    resets_in_seconds=snapshot.primary.resets_in_seconds,
+                )
+            if snapshot.secondary:
+                from .pool_manager import RateLimitWindow as PoolRateLimitWindow
+                usage.secondary = PoolRateLimitWindow(
+                    used_percent=snapshot.secondary.used_percent,
+                    window_minutes=snapshot.secondary.window_minutes,
+                    resets_in_seconds=snapshot.secondary.resets_in_seconds,
+                )
+
+            pool_service.record_request_success(internal_id, usage)
+    except Exception:
+        pass  # Non-critical: pool update failed
 
 
 def compute_reset_at(captured_at: datetime, window: RateLimitWindow) -> Optional[datetime]:

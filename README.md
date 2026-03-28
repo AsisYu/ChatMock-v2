@@ -53,6 +53,87 @@ The server runs at `http://127.0.0.1:8000` by default. Use `http://127.0.0.1:800
 
 <br>
 
+## Multi-Account Pool
+
+ChatMock supports multiple ChatGPT accounts with automatic switching when rate limits are hit.
+
+### Adding Accounts
+
+```bash
+# Add first account
+chatmock login
+
+# Add additional accounts (run login again)
+chatmock login
+```
+
+Each login prompts you to confirm adding the account to the pool.
+
+### Managing Accounts
+
+```bash
+# List all accounts
+chatmock account list
+
+# Show account details
+chatmock account show <account-id>
+
+# Set account priority (1=highest, 10=lowest)
+chatmock account priority <account-id> 1
+
+# Rename an account
+chatmock account rename <account-id> "work-account"
+
+# Remove an account
+chatmock account remove <account-id>
+```
+
+### Pool Status
+
+```bash
+# View pool status
+chatmock pool status
+
+# View as JSON
+chatmock pool status --json
+```
+
+### API Endpoints
+
+Pool management API (localhost only by default):
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/pool/status` | GET | Get pool status |
+| `/v1/pool/accounts` | GET | List all accounts |
+| `/v1/pool/accounts/<id>` | GET | Get account details |
+| `/v1/pool/accounts/<id>` | DELETE | Remove account |
+| `/v1/pool/accounts/<id>` | PATCH | Update alias/priority |
+| `/v1/pool/reload` | POST | Reload pool from disk |
+| `/v1/pool/config` | GET/PATCH | View/update config |
+
+### Security for Reverse Proxy
+
+If running behind nginx/traefik, set an API token:
+
+```bash
+export CHATMOCK_POOL_API_TOKEN="your-secret-token"
+```
+
+Then include the token in requests:
+```bash
+curl -H "Authorization: Bearer your-secret-token" http://your-server/v1/pool/status
+```
+
+### How It Works
+
+- **Automatic switching**: When an account hits rate limits, it enters cooldown and the next available account is used
+- **Weighted selection**: Accounts with higher priority and more remaining quota are preferred
+- **Cooldown recovery**: Accounts automatically become available again after rate limit reset
+- **Thread-safe**: Safe for concurrent requests
+
+<br>
+
 ## Usage
 
 <details open>

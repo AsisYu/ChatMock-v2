@@ -220,10 +220,22 @@ def convert_tools_chat_to_responses(tools: Any) -> List[Dict[str, Any]]:
 
 
 def load_chatgpt_tokens(ensure_fresh: bool = True) -> tuple[str | None, str | None, str | None]:
+    """
+    Load ChatGPT tokens from auth file.
+
+    Supports both v1 (single account) and v2 (multi-account pool) formats.
+    For v2, returns tokens from the first available account.
+    """
     auth = read_auth_file()
     if not isinstance(auth, dict):
         return None, None, None
 
+    # Check for v2 pool format
+    version = auth.get("version", "1.0")
+    if version == "2.0" and isinstance(auth.get("accounts"), list):
+        return _load_tokens_from_pool(auth, ensure_fresh)
+
+    # v1 format: single account with top-level tokens
     tokens = auth.get("tokens") if isinstance(auth.get("tokens"), dict) else {}
     access_token: Optional[str] = tokens.get("access_token")
     account_id: Optional[str] = tokens.get("account_id")
@@ -263,6 +275,101 @@ def load_chatgpt_tokens(ensure_fresh: bool = True) -> tuple[str | None, str | No
     access_token = access_token if isinstance(access_token, str) and access_token else None
     id_token = id_token if isinstance(id_token, str) and id_token else None
     account_id = account_id if isinstance(account_id, str) and account_id else None
+    return access_token, account_id, id_token
+
+
+def _load_tokens_from_pool(auth: Dict[str, Any], ensure_fresh: bool = True) -> tuple[str | None, str | None, str | None]:
+    """
+    Load tokens from v2 pool format.
+
+    Selects the best available account (highest priority, not in cooldown/error).
+    Optionally refreshes tokens if ensure_fresh=True and token is expiring.
+    """
+    accounts = auth.get("accounts", [])
+    if not accounts:
+        return None, None, None
+
+    # Find the best available account
+    best_account = None
+    best_priority = 999
+
+    for acc in accounts:
+        if not isinstance(acc, dict):
+            continue
+
+        # Skip error accounts
+        status = acc.get("status", "active")
+        if status == "error":
+            continue
+
+        # Skip cooldown accounts
+        if status == "cooldown":
+            cooldown_until = acc.get("cooldown_until")
+            if cooldown_until:
+                try:
+                    from datetime import datetime, timezone
+                    if isinstance(cooldown_until, str):
+                        if cooldown_until.endswith("Z"):
+                            cooldown_until = cooldown_until[:-1] + "+00:00"
+                        cooldown_dt = datetime.fromisoformat(cooldown_until)
+                        if cooldown_dt > datetime.now(timezone.utc):
+                            continue
+                except Exception:
+                    pass
+
+        priority = acc.get("priority", 5)
+        if priority < best_priority:
+            best_priority = priority
+            best_account = acc
+
+    if not best_account:
+        # Fall back to first account if all are in error/cooldown
+        best_account = accounts[0] if accounts else None
+
+    if not best_account:
+        return None, None, None
+
+    tokens = best_account.get("tokens", {})
+    if not isinstance(tokens, dict):
+        return None, None, None
+
+    access_token = tokens.get("access_token")
+    id_token = tokens.get("id_token")
+    account_id = tokens.get("account_id")
+    refresh_token = tokens.get("refresh_token")
+
+    # Ensure types
+    access_token = access_token if isinstance(access_token, str) and access_token else None
+    id_token = id_token if isinstance(id_token, str) and id_token else None
+    account_id = account_id if isinstance(account_id, str) and account_id else None
+    refresh_token = refresh_token if isinstance(refresh_token, str) and refresh_token else None
+
+    # Token refresh logic (similar to v1 path)
+    if ensure_fresh and refresh_token and CLIENT_ID_DEFAULT:
+        needs_refresh = _should_refresh_access_token(access_token, None)
+        if needs_refresh or not access_token:
+            refreshed = _refresh_chatgpt_tokens(refresh_token, CLIENT_ID_DEFAULT)
+            if refreshed:
+                access_token = refreshed.get("access_token") or access_token
+                id_token = refreshed.get("id_token") or id_token
+                refresh_token = refreshed.get("refresh_token") or refresh_token
+                account_id = refreshed.get("account_id") or account_id
+
+                # Update the pool via PoolService to persist refreshed tokens
+                # Use update_account_tokens to preserve metadata (priority, status, etc.)
+                try:
+                    from .pool_manager import get_pool_service
+                    pool_service = get_pool_service()
+                    pool_service.update_account_tokens(
+                        account_id=account_id,
+                        id_token=id_token,
+                        access_token=access_token,
+                        refresh_token=refresh_token,
+                    )
+                except Exception:
+                    # Non-critical: tokens refreshed but not persisted
+                    pass
+
     return access_token, account_id, id_token
 
 
@@ -368,10 +475,35 @@ def _now_iso8601() -> str:
 
 
 def get_effective_chatgpt_auth() -> tuple[str | None, str | None]:
+    """
+    Get effective ChatGPT auth credentials.
+
+    Supports multi-account pool if available, falls back to single account.
+
+    Returns:
+        Tuple of (access_token, account_id, internal_account_id_or_none)
+        internal_account_id is only returned when using pool mode.
+    """
+    # Try pool service first
+    try:
+        from .pool_manager import get_pool_service, NoAvailableAccountError
+        pool_service = get_pool_service()
+
+        # Check if pool has accounts
+        if pool_service.pool.accounts:
+            access_token, account_id, internal_id = pool_service.get_account_for_request()
+            return access_token, account_id, internal_id
+    except NoAvailableAccountError:
+        # Pool exists but no account is available; propagate so callers can surface the exhaustion.
+        raise
+    except Exception as exc:
+        eprint(f"WARNING: account pool unavailable, falling back to single-account auth: {exc}")
+
+    # Fallback to single account mode (no internal_id)
     access_token, account_id, id_token = load_chatgpt_tokens()
     if not account_id:
         account_id = _derive_account_id(id_token)
-    return access_token, account_id
+    return access_token, account_id, None
 
 
 def sse_translate_chat(

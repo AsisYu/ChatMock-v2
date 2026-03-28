@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Tuple
 from urllib.parse import urlparse, urlunparse
 
 import requests
-from flask import Response, current_app, jsonify, make_response
+from flask import Response, current_app, jsonify, make_response, g
 
 from .config import CHATGPT_RESPONSES_URL
 from .http import build_cors_headers
@@ -14,6 +14,46 @@ from .model_registry import normalize_model_name
 from .session import ensure_session_id
 from flask import request as flask_request
 from .utils import get_effective_chatgpt_auth
+
+
+# Context key for storing internal account ID during request
+_POOL_ACCOUNT_KEY = "_pool_internal_account_id"
+
+
+def set_pool_account_id(account_id: str) -> None:
+    """Store the pool account ID for the current request context."""
+    setattr(g, _POOL_ACCOUNT_KEY, account_id)
+
+
+def get_pool_account_id() -> str | None:
+    """Get the pool account ID for the current request context."""
+    return getattr(g, _POOL_ACCOUNT_KEY, None)
+
+
+def record_pool_request_success() -> None:
+    """Record a successful request to the pool account."""
+    internal_id = get_pool_account_id()
+    if not internal_id:
+        return
+    try:
+        from .pool_manager import get_pool_service
+        pool_service = get_pool_service()
+        pool_service.record_request_success(internal_id)
+    except Exception:
+        pass  # Non-critical
+
+
+def record_pool_request_failure(error: Exception, reset_after: int | None = None) -> None:
+    """Record a failed request to the pool account."""
+    internal_id = get_pool_account_id()
+    if not internal_id:
+        return
+    try:
+        from .pool_manager import get_pool_service
+        pool_service = get_pool_service()
+        pool_service.record_request_failure(internal_id, error, reset_after)
+    except Exception:
+        pass  # Non-critical
 
 
 def _log_json(prefix: str, payload: Any) -> None:
@@ -36,7 +76,7 @@ def start_upstream_request(
     reasoning_param: Dict[str, Any] | None = None,
     service_tier: str | None = None,
 ):
-    access_token, account_id = get_effective_chatgpt_auth()
+    access_token, account_id, internal_id = get_effective_chatgpt_auth()
     if not access_token or not account_id:
         resp = make_response(
             jsonify(
@@ -51,6 +91,10 @@ def start_upstream_request(
         for k, v in build_cors_headers().items():
             resp.headers.setdefault(k, v)
         return None, resp
+
+    # Store pool account ID for later recording
+    if internal_id:
+        set_pool_account_id(internal_id)
 
     include: List[str] = []
     if isinstance(reasoning_param, dict):
@@ -116,7 +160,7 @@ def start_upstream_raw_request(
     session_id: str | None = None,
     stream: bool = True,
 ):
-    access_token, account_id = get_effective_chatgpt_auth()
+    access_token, account_id, internal_id = get_effective_chatgpt_auth()
     if not access_token or not account_id:
         resp = make_response(
             jsonify(
@@ -131,6 +175,10 @@ def start_upstream_raw_request(
         for k, v in build_cors_headers().items():
             resp.headers.setdefault(k, v)
         return None, resp
+
+    # Store pool account ID for later recording
+    if internal_id:
+        set_pool_account_id(internal_id)
 
     effective_session_id = session_id
     if not isinstance(effective_session_id, str) or not effective_session_id.strip():

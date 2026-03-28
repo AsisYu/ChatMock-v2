@@ -7,6 +7,7 @@ from .config import BASE_INSTRUCTIONS, GPT5_CODEX_INSTRUCTIONS
 from .http import build_cors_headers
 from .routes_openai import openai_bp
 from .routes_ollama import ollama_bp
+from .routes_pool import pool_bp
 from .websocket_routes import register_websocket_routes
 
 
@@ -50,6 +51,7 @@ def create_app(
 
     app.register_blueprint(openai_bp)
     app.register_blueprint(ollama_bp)
+    app.register_blueprint(pool_bp)
     sock = Sock(app)
     register_websocket_routes(sock)
 
