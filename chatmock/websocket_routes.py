@@ -16,6 +16,7 @@ from .responses_api import (
     extract_client_session_id,
     normalize_responses_payload,
 )
+from .routes_pool import has_valid_main_api_token, is_main_api_token_configured
 from .session import (
     clear_responses_reuse_state,
     note_responses_stream_event,
@@ -74,6 +75,21 @@ def register_websocket_routes(sock: Sock) -> None:
         upstream_ws = None
         upstream_session_id: str | None = None
         active_session_id: str | None = None
+
+        # Check API token authentication if configured
+        if is_main_api_token_configured() and not has_valid_main_api_token(request.headers):
+            evt = _error_event("Invalid or missing API token", status_code=401, code="UNAUTHORIZED")
+            if verbose:
+                _log_json("STREAM OUT WS /v1/responses (unauthorized)", evt)
+            try:
+                ws.send(json.dumps(evt))
+            except Exception:
+                pass
+            try:
+                ws.close()
+            except Exception:
+                pass
+            return
 
         def _send_error(message: str, *, status_code: int = 400, code: str | None = None) -> None:
             evt = _error_event(message, status_code=status_code, code=code)

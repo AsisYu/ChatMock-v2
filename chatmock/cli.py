@@ -341,7 +341,22 @@ def cmd_serve(
     debug_model: str | None,
     expose_reasoning_models: bool,
     default_web_search: bool,
+    api_token: str | None,
 ) -> int:
+    # Set API token if provided
+    if api_token:
+        os.environ["CHATMOCK_API_TOKEN"] = api_token
+        # Import config to ensure it picks up the env var
+        from . import config
+        config.CHATMOCK_API_TOKEN = api_token
+        # Mask token for logging - never expose full token
+        if len(api_token) > 8:
+            masked_middle = "*" * (len(api_token) - 8)
+            preview = f"{api_token[:4]}{masked_middle}{api_token[-4:]}"
+        else:
+            preview = "*" * len(api_token)
+        print(f"API authentication enabled. Token preview: {preview} (length={len(api_token)})")
+
     app = create_app(
         verbose=verbose,
         verbose_obfuscation=verbose_obfuscation,
@@ -426,6 +441,14 @@ def main() -> None:
             "Also configurable via CHATGPT_LOCAL_ENABLE_WEB_SEARCH."
         ),
     )
+    p_serve.add_argument(
+        "--api-token",
+        default=os.getenv("CHATMOCK_API_TOKEN"),
+        help=(
+            "API token for authentication. When set, clients must provide this token "
+            "via Authorization: Bearer <token>. Also configurable via CHATMOCK_API_TOKEN environment variable."
+        ),
+    )
 
     p_info = sub.add_parser("info", help="Print current stored tokens and derived account id")
     p_info.add_argument("--json", action="store_true", help="Output raw auth.json contents")
@@ -477,6 +500,7 @@ def main() -> None:
                 debug_model=args.debug_model,
                 expose_reasoning_models=args.expose_reasoning_models,
                 default_web_search=args.enable_web_search,
+                api_token=args.api_token,
             )
         )
     elif args.command == "info":

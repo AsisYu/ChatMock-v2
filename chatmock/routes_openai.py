@@ -38,6 +38,7 @@ from .upstream import (
     record_pool_request_failure,
 )
 from .pool_manager import RateLimitError, AuthenticationError
+from .routes_pool import require_api_token
 from .utils import (
     convert_chat_messages_to_responses_input,
     convert_tools_chat_to_responses,
@@ -109,6 +110,7 @@ def _service_tier_from_payload(
 
 
 @openai_bp.route("/v1/chat/completions", methods=["POST"])
+@require_api_token
 def chat_completions() -> Response:
     verbose = bool(current_app.config.get("VERBOSE"))
     verbose_obfuscation = bool(current_app.config.get("VERBOSE_OBFUSCATION"))
@@ -430,6 +432,7 @@ def chat_completions() -> Response:
 
 
 @openai_bp.route("/v1/completions", methods=["POST"])
+@require_api_token
 def completions() -> Response:
     verbose = bool(current_app.config.get("VERBOSE"))
     verbose_obfuscation = bool(current_app.config.get("VERBOSE_OBFUSCATION"))
@@ -593,6 +596,7 @@ def completions() -> Response:
 
 
 @openai_bp.route("/v1/responses", methods=["POST"])
+@require_api_token
 def responses_create() -> Response:
     verbose = bool(current_app.config.get("VERBOSE"))
     raw = request.get_data(cache=True, as_text=True) or ""
@@ -748,6 +752,7 @@ def responses_create() -> Response:
 
 
 @openai_bp.route("/v1/models", methods=["GET"])
+@require_api_token
 def list_models() -> Response:
     expose_variants = bool(current_app.config.get("EXPOSE_REASONING_MODELS"))
     model_ids = list_public_models(expose_reasoning_models=expose_variants)

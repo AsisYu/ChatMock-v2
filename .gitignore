@@ -17,5 +17,25 @@ dist/
 .pytest_cache/
 .mypy_cache/
 
+# IDE and editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Claude Code
+.claude/
+
+# Project specific
+.chatgpt-local/
+.chatmock_auth.json
+
+# Logs and databases
+*.log
+*.sqlite
+*.db
+
 # OS clutter
 .DS_Store
+Thumbs.db

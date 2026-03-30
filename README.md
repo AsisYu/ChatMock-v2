@@ -203,6 +203,41 @@ curl http://127.0.0.1:8000/v1/chat/completions \
 - OpenAI-compatible `/v1/responses` (HTTP + WebSocket)
 - Ollama-compatible endpoints
 - Reasoning effort exposed as separate models (optional)
+- Optional API token authentication
+
+<br>
+
+## API Authentication
+
+By default, ChatMock accepts requests without authentication (suitable for localhost development).
+
+To enable authentication, set an API token:
+
+```bash
+# Via environment variable
+export CHATMOCK_API_TOKEN="your-secret-token"
+chatmock serve
+
+# Or via CLI flag
+chatmock serve --api-token "your-secret-token"
+```
+
+When enabled, clients must include the token:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://127.0.0.1:8000/v1",
+    api_key="your-secret-token"  # Must match the configured token
+)
+```
+
+```bash
+curl -H "Authorization: Bearer your-secret-token" \
+  http://127.0.0.1:8000/v1/chat/completions \
+  -d '{"model": "gpt-5.4", "messages": [{"role": "user", "content": "hello"}]}'
+```
 
 <br>
 
@@ -218,6 +253,7 @@ All flags go after `chatmock serve`. These can also be set as environment variab
 | `--fast-mode` | `CHATGPT_LOCAL_FAST_MODE` | true/false | false | Priority processing for supported models |
 | `--enable-web-search` | `CHATGPT_LOCAL_ENABLE_WEB_SEARCH` | true/false | false | Allow the model to search the web |
 | `--expose-reasoning-models` | `CHATGPT_LOCAL_EXPOSE_REASONING_MODELS` | true/false | false | List each reasoning level as its own model |
+| `--api-token` | `CHATMOCK_API_TOKEN` | string | none | API token for authentication |
 
 <details>
 <summary><b>Web search in a request</b></summary>

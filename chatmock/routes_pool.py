@@ -13,22 +13,43 @@ CHATMOCK_POOL_API_TOKEN to prevent unauthorized access.
 
 from __future__ import annotations
 
+import hmac
 import ipaddress
 import os
+from typing import Mapping
 from flask import Blueprint, jsonify, request
 
+from . import config
 from .http import build_cors_headers
 from .pool_manager import (
     get_pool_service,
     NoAvailableAccountError,
     AccountNotFoundError,
 )
+from .utils import eprint
 
 
 pool_bp = Blueprint("pool", __name__, url_prefix="/v1/pool")
 
 # API token for reverse proxy security (optional but recommended)
 _POOL_API_TOKEN = os.environ.get("CHATMOCK_POOL_API_TOKEN")
+
+
+def _get_main_api_token() -> str | None:
+    """Get the main API token dynamically from config or environment."""
+    token = getattr(config, "CHATMOCK_API_TOKEN", None)
+    if token:
+        return token
+    env_token = os.environ.get("CHATMOCK_API_TOKEN")
+    if env_token:
+        config.CHATMOCK_API_TOKEN = env_token
+        return env_token
+    return None
+
+
+def is_main_api_token_configured() -> bool:
+    """Check if main API token authentication is enabled."""
+    return bool(_get_main_api_token())
 
 
 def _is_localhost_request() -> bool:
@@ -69,7 +90,67 @@ def _has_valid_api_token() -> bool:
         return False
 
     token = auth_header[7:]  # Remove "Bearer " prefix
-    return token == _POOL_API_TOKEN
+    return hmac.compare_digest(token, _POOL_API_TOKEN)
+
+
+def has_valid_main_api_token(headers: Mapping[str, str] | None = None) -> bool:
+    """Check if request has valid main API token in Authorization header.
+
+    Uses constant-time comparison to prevent timing attacks.
+    Fetches token dynamically to support CLI-provided tokens.
+    """
+    token_expected = _get_main_api_token()
+    if not token_expected:
+        return False
+
+    header_source = headers if headers is not None else request.headers
+    auth_header = header_source.get("Authorization", "")
+    if not isinstance(auth_header, str) or not auth_header.startswith("Bearer "):
+        return False
+
+    provided = auth_header[7:]  # Remove "Bearer " prefix
+    return hmac.compare_digest(provided, token_expected)
+
+
+def require_api_token(f):
+    """
+    Decorator for optional API token authentication on main API endpoints.
+
+    Security logic:
+    1. If CHATMOCK_API_TOKEN is NOT set: allow all requests (backward compatible)
+    2. If CHATMOCK_API_TOKEN IS set: require valid Bearer token
+    3. If proxy headers detected without token configured: warn but allow
+
+    This ensures backward compatibility while enabling authentication when needed.
+    """
+    def wrapped(*args, **kwargs):
+        # Case 1: Token not configured - allow all (backward compatible)
+        if not is_main_api_token_configured():
+            # Security warning for proxy scenarios
+            if _has_proxy_headers():
+                eprint(
+                    "WARNING: Server appears to be behind a reverse proxy but "
+                    "CHATMOCK_API_TOKEN is not set. Consider setting it for security."
+                )
+            return f(*args, **kwargs)
+
+        # Case 2: Token configured - require valid authentication
+        if has_valid_main_api_token():
+            return f(*args, **kwargs)
+
+        # Case 3: Invalid or missing token
+        response = jsonify({
+            "error": {
+                "type": "UnauthorizedError",
+                "message": "Invalid or missing API token"
+            }
+        })
+        for k, v in build_cors_headers().items():
+            response.headers.setdefault(k, v)
+        return response, 401
+
+    wrapped.__name__ = f.__name__
+    return wrapped
 
 
 def secure_endpoint(f):

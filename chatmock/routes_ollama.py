@@ -18,6 +18,7 @@ from .reasoning import (
     build_reasoning_param,
     extract_reasoning_from_model_name,
 )
+from .routes_pool import require_api_token
 from .transform import convert_ollama_messages, normalize_ollama_tools
 from .upstream import normalize_model_name, start_upstream_request
 from .utils import convert_chat_messages_to_responses_input, convert_tools_chat_to_responses
@@ -57,6 +58,7 @@ def _wrap_stream_logging(label: str, iterator, enabled: bool):
 
 
 @ollama_bp.route("/api/version", methods=["GET"])
+@require_api_token
 def ollama_version() -> Response:
     if bool(current_app.config.get("VERBOSE")):
         print("IN GET /api/version")
@@ -87,6 +89,7 @@ _OLLAMA_FAKE_EVAL = {
 
 
 @ollama_bp.route("/api/tags", methods=["GET"])
+@require_api_token
 def ollama_tags() -> Response:
     if bool(current_app.config.get("VERBOSE")):
         print("IN GET /api/tags")
@@ -121,6 +124,7 @@ def ollama_tags() -> Response:
 
 
 @ollama_bp.route("/api/show", methods=["POST"])
+@require_api_token
 def ollama_show() -> Response:
     verbose = bool(current_app.config.get("VERBOSE"))
     raw_body = request.get_data(cache=True, as_text=True) or ""
@@ -167,6 +171,7 @@ def ollama_show() -> Response:
 
 
 @ollama_bp.route("/api/chat", methods=["POST"])
+@require_api_token
 def ollama_chat() -> Response:
     verbose = bool(current_app.config.get("VERBOSE"))
     reasoning_effort = current_app.config.get("REASONING_EFFORT", "medium")

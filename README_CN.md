@@ -203,6 +203,41 @@ curl http://127.0.0.1:8000/v1/chat/completions \
 - OpenAI 兼容的 `/v1/responses` (HTTP + WebSocket)
 - Ollama 兼容端点
 - 推理强度作为独立模型暴露（可选）
+- 可选的 API Token 认证
+
+<br>
+
+## API 认证
+
+默认情况下，ChatMock 接受无认证的请求（适用于本地开发）。
+
+要启用认证，请设置 API Token：
+
+```bash
+# 通过环境变量
+export CHATMOCK_API_TOKEN="your-secret-token"
+chatmock serve
+
+# 或通过 CLI 参数
+chatmock serve --api-token "your-secret-token"
+```
+
+启用后，客户端必须携带 Token：
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://127.0.0.1:8000/v1",
+    api_key="your-secret-token"  # 必须与配置的 Token 匹配
+)
+```
+
+```bash
+curl -H "Authorization: Bearer your-secret-token" \
+  http://127.0.0.1:8000/v1/chat/completions \
+  -d '{"model": "gpt-5.4", "messages": [{"role": "user", "content": "hello"}]}'
+```
 
 <br>
 
@@ -218,6 +253,7 @@ curl http://127.0.0.1:8000/v1/chat/completions \
 | `--fast-mode` | `CHATGPT_LOCAL_FAST_MODE` | true/false | false | 支持模型的优先处理 |
 | `--enable-web-search` | `CHATGPT_LOCAL_ENABLE_WEB_SEARCH` | true/false | false | 允许模型搜索网页 |
 | `--expose-reasoning-models` | `CHATGPT_LOCAL_EXPOSE_REASONING_MODELS` | true/false | false | 将每个推理级别列为独立模型 |
+| `--api-token` | `CHATMOCK_API_TOKEN` | 字符串 | 无 | API 认证 Token |
 
 <details>
 <summary><b>请求中的网页搜索</b></summary>

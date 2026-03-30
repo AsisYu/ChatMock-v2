@@ -11,6 +11,9 @@ OAUTH_TOKEN_URL = f"{OAUTH_ISSUER_DEFAULT}/oauth/token"
 
 CHATGPT_RESPONSES_URL = "https://chatgpt.com/backend-api/codex/responses"
 
+# API token for main endpoints (optional - enables authentication when set)
+CHATMOCK_API_TOKEN = os.getenv("CHATMOCK_API_TOKEN")
+
 
 def _read_prompt_text(filename: str) -> str | None:
     candidates = [
