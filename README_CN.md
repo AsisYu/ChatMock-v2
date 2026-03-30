@@ -4,6 +4,8 @@
 
 **让 Codex 在你喜爱的聊天应用和编程工具中运行**
 
+[中文文档](README_CN.md) | [English](README.md)
+
 [![PyPI](https://img.shields.io/pypi/v/chatmock?color=blue&label=pypi)](https://pypi.org/project/chatmock/)
 [![Python](https://img.shields.io/pypi/pyversions/chatmock)](https://pypi.org/project/chatmock/)
 [![License](https://img.shields.io/github/license/RayBytes/ChatMock)](LICENSE)
