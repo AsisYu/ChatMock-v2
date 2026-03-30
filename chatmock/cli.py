@@ -539,8 +539,8 @@ def _handle_account_command(args) -> None:
             return
 
         print("📋 Accounts in Pool\n")
-        print(f"{'ID':<20} {'Alias':<20} {'Status':<10} {'Priority':<8} {'Usage':<8}")
-        print("-" * 70)
+        print(f"{'ID':<36} {'Alias':<25} {'Status':<10} {'Priority':<8} {'Usage':<8}")
+        print("-" * 95)
         for acc in accounts:
             status = acc.get("status", "unknown")
             status_color = {
@@ -551,7 +551,7 @@ def _handle_account_command(args) -> None:
             }.get(status, "")
             reset = "\033[0m"
             usage = acc.get("usage_percent", 0)
-            print(f"{acc['id'][:18]:<20} {acc['alias']:<20} {status_color}{status:<10}{reset} {acc.get('priority', 5):<8} {usage:.1f}%")
+            print(f"{acc['id']:<36} {acc['alias']:<25} {status_color}{status:<10}{reset} {acc.get('priority', 5):<8} {usage:.1f}%")
 
     elif args.account_command == "show":
         account = pool_service.get_account_info(args.account_id)
