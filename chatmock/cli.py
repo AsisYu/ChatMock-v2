@@ -568,39 +568,61 @@ def _handle_account_command(args) -> None:
 
         # Count by status
         status_counts = {"active": 0, "ready": 0, "cooldown": 0, "error": 0}
+        high_usage_count = 0
         for acc in accounts:
             status = acc.get("status", "unknown")
             if status in status_counts:
                 status_counts[status] += 1
+            if acc.get("usage_percent", 0) >= 95:
+                high_usage_count += 1
 
         # Summary header with warnings
         print("📋 Accounts in Pool\n")
         if status_counts["error"] > 0:
-            print(f"  ⚠️  \033[91m{status_counts['error']} account(s) in ERROR state\033[0m - use 'chatmock account reset <id>' to recover\n")
+            print(f"  ❌ \033[91m{status_counts['error']} account(s) in ERROR state\033[0m - use 'chatmock account reset <id>' to recover")
         if status_counts["cooldown"] > 0:
-            print(f"  ⏳ \033[93m{status_counts['cooldown']} account(s) in COOLDOWN\033[0m - waiting for rate limit reset\n")
-        if status_counts["active"] + status_counts["ready"] > 0:
-            print(f"  ✅ \033[92m{status_counts['active'] + status_counts['ready']} account(s) AVAILABLE\033[0m\n")
+            print(f"  ⏳ \033[93m{status_counts['cooldown']} account(s) in COOLDOWN\033[0m - waiting for rate limit reset")
+        if high_usage_count > 0:
+            print(f"  ⚠️  \033[93m{high_usage_count} account(s) with HIGH USAGE (≥95%)\033[0m - may enter cooldown soon")
+        if status_counts["active"] > 0:
+            print(f"  ✅ \033[92m{status_counts['active']} account(s) ACTIVE\033[0m")
+        if status_counts["ready"] > 0:
+            print(f"  🔄 \033[94m{status_counts['ready']} account(s) READY\033[0m (exited cooldown)")
+        print()
 
         print(f"{'ID':<36} {'Alias':<25} {'Status':<12} {'Priority':<8} {'Usage':<8}")
         print("-" * 100)
         for acc in accounts:
             status = acc.get("status", "unknown")
-            # Status with icon and color
-            status_display = {
-                "active": "✅ active",
-                "ready": "✅ ready",
-                "cooldown": "⏳ cooldown",
-                "error": "❌ ERROR",
-            }.get(status, status)
-            status_color = {
-                "active": "\033[92m",
-                "ready": "\033[92m",
-                "cooldown": "\033[93m",
-                "error": "\033[91m",
-            }.get(status, "")
-            reset = "\033[0m"
             usage = acc.get("usage_percent", 0)
+
+            # Status with icon - ready gets different icon from active
+            # High usage accounts get warning color
+            if status == "active":
+                if usage >= 95:
+                    status_display = "⚠️ active"
+                    status_color = "\033[93m"  # Yellow warning
+                else:
+                    status_display = "✅ active"
+                    status_color = "\033[92m"  # Green
+            elif status == "ready":
+                if usage >= 95:
+                    status_display = "⚠️ ready"
+                    status_color = "\033[93m"  # Yellow warning
+                else:
+                    status_display = "🔄 ready"
+                    status_color = "\033[94m"  # Blue
+            elif status == "cooldown":
+                status_display = "⏳ cooldown"
+                status_color = "\033[93m"  # Yellow
+            elif status == "error":
+                status_display = "❌ ERROR"
+                status_color = "\033[91m"  # Red
+            else:
+                status_display = status
+                status_color = ""
+
+            reset = "\033[0m"
             print(f"{acc['id']:<36} {acc['alias']:<25} {status_color}{status_display:<12}{reset} {acc.get('priority', 5):<8} {usage:.1f}%")
 
     elif args.account_command == "show":
@@ -706,43 +728,57 @@ def _handle_pool_command(args) -> None:
         cooldown = status.get('cooldown_accounts', 0)
         error = status.get('error_accounts', 0)
 
+        accounts = status.get("accounts", [])
+        high_usage_count = sum(1 for acc in accounts if acc.get("usage_percent", 0) >= 95)
+
         print("📊 Pool Status\n")
         print(f"  Total Accounts:     {total}")
 
-        # Show available count prominently
-        available = active + ready
-        if available > 0:
-            print(f"  ✅ Available:       \033[92m{available}\033[0m (active: {active}, ready: {ready})")
-        else:
-            print(f"  ❌ Available:       \033[91m0\033[0m - No accounts available!")
-
+        if error > 0:
+            print(f"  ❌ Error:           \033[91m{error}\033[0m - Use 'chatmock account reset <id>' to recover")
         if cooldown > 0:
             print(f"  ⏳ Cooldown:        \033[93m{cooldown}\033[0m")
-        if error > 0:
-            print(f"  ⚠️  Error:           \033[91m{error}\033[0m - Use 'chatmock account reset <id>' to recover")
+        if high_usage_count > 0:
+            print(f"  ⚠️  High Usage:       \033[93m{high_usage_count}\033[0m (≥95%) - may enter cooldown soon")
+        if active > 0:
+            print(f"  ✅ Active:          \033[92m{active}\033[0m")
+        if ready > 0:
+            print(f"  🔄 Ready:           \033[94m{ready}\033[0m (exited cooldown)")
 
-        accounts = status.get("accounts", [])
         if accounts:
             print("\n📋 Accounts\n")
             print(f"{'Alias':<25} {'Status':<12} {'Priority':<8} {'Usage':<8}")
             print("-" * 60)
             for acc in accounts:
                 status_str = acc.get("status", "unknown")
-                # Status with icon
-                status_display = {
-                    "active": "✅ active",
-                    "ready": "✅ ready",
-                    "cooldown": "⏳ cooldown",
-                    "error": "❌ ERROR",
-                }.get(status_str, status_str)
-                status_color = {
-                    "active": "\033[92m",
-                    "ready": "\033[92m",
-                    "cooldown": "\033[93m",
-                    "error": "\033[91m",
-                }.get(status_str, "")
-                reset = "\033[0m"
                 usage = acc.get("usage_percent", 0)
+
+                # Status with icon - same logic as account list
+                if status_str == "active":
+                    if usage >= 95:
+                        status_display = "⚠️ active"
+                        status_color = "\033[93m"
+                    else:
+                        status_display = "✅ active"
+                        status_color = "\033[92m"
+                elif status_str == "ready":
+                    if usage >= 95:
+                        status_display = "⚠️ ready"
+                        status_color = "\033[93m"
+                    else:
+                        status_display = "🔄 ready"
+                        status_color = "\033[94m"
+                elif status_str == "cooldown":
+                    status_display = "⏳ cooldown"
+                    status_color = "\033[93m"
+                elif status_str == "error":
+                    status_display = "❌ ERROR"
+                    status_color = "\033[91m"
+                else:
+                    status_display = status_str
+                    status_color = ""
+
+                reset = "\033[0m"
                 alias = acc.get('alias', acc.get('id', 'unknown'))[:24]
                 print(f"{alias:<25} {status_color}{status_display:<12}{reset} {acc.get('priority', 5):<8} {usage:.1f}%")
 

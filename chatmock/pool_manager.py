@@ -373,6 +373,10 @@ class AccountPool:
                 # All have zero weight, pick randomly
                 acc = random.choice(available)
                 acc.last_used = datetime.now(timezone.utc)
+                if acc.status == AccountStatus.READY:
+                    acc.status = AccountStatus.ACTIVE
+                    if self._on_account_status_changed:
+                        self._on_account_status_changed(acc, AccountStatus.ACTIVE)
                 return acc
 
             # Weighted random selection
@@ -382,11 +386,19 @@ class AccountPool:
                 cumulative += weight
                 if r <= cumulative:
                     acc.last_used = datetime.now(timezone.utc)
+                    if acc.status == AccountStatus.READY:
+                        acc.status = AccountStatus.ACTIVE
+                        if self._on_account_status_changed:
+                            self._on_account_status_changed(acc, AccountStatus.ACTIVE)
                     return acc
 
             # Fallback to last account
             acc = available[-1]
             acc.last_used = datetime.now(timezone.utc)
+            if acc.status == AccountStatus.READY:
+                acc.status = AccountStatus.ACTIVE
+                if self._on_account_status_changed:
+                    self._on_account_status_changed(acc, AccountStatus.ACTIVE)
             return acc
 
     def _update_cooldowns(self) -> None:
