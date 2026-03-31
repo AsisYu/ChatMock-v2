@@ -86,8 +86,29 @@ chatmock account priority <account-id> 1
 # Rename an account
 chatmock account rename <account-id> "work-account"
 
+# Reset an account from error state to active
+chatmock account reset <account-id>
+
 # Remove an account
 chatmock account remove <account-id>
+```
+
+### Account Status
+
+| Status | Icon | Description |
+|--------|------|-------------|
+| `active` | ✅ | Available for use |
+| `ready` | ✅ | Cooldown finished, ready to use |
+| `cooldown` | ⏳ | Rate limit cooldown |
+| `error` | ❌ | Auth failed or consecutive failures, requires manual reset |
+
+**Recovering error accounts**:
+```bash
+# Check which accounts have errors
+chatmock pool status
+
+# Reset a single account
+chatmock account reset <account-id>
 ```
 
 ### Pool Status

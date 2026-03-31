@@ -475,6 +475,10 @@ def main() -> None:
     p_account_priority.add_argument("account_id", help="Account ID")
     p_account_priority.add_argument("priority", type=int, help="Priority (1-10)")
 
+    p_account_reset = account_sub.add_parser("reset", help="Reset account from error state to active")
+    p_account_reset.add_argument("account_id", help="Account ID to reset")
+    p_account_reset.add_argument("--force", action="store_true", help="Skip confirmation")
+
     # Pool subcommands
     p_pool = sub.add_parser("pool", help="Manage the account pool")
     pool_sub = p_pool.add_subparsers(dest="pool_command", required=True)
@@ -562,11 +566,33 @@ def _handle_account_command(args) -> None:
             print("No accounts in pool. Run 'chatmock login' to add one.")
             return
 
-        print("📋 Accounts in Pool\n")
-        print(f"{'ID':<36} {'Alias':<25} {'Status':<10} {'Priority':<8} {'Usage':<8}")
-        print("-" * 95)
+        # Count by status
+        status_counts = {"active": 0, "ready": 0, "cooldown": 0, "error": 0}
         for acc in accounts:
             status = acc.get("status", "unknown")
+            if status in status_counts:
+                status_counts[status] += 1
+
+        # Summary header with warnings
+        print("📋 Accounts in Pool\n")
+        if status_counts["error"] > 0:
+            print(f"  ⚠️  \033[91m{status_counts['error']} account(s) in ERROR state\033[0m - use 'chatmock account reset <id>' to recover\n")
+        if status_counts["cooldown"] > 0:
+            print(f"  ⏳ \033[93m{status_counts['cooldown']} account(s) in COOLDOWN\033[0m - waiting for rate limit reset\n")
+        if status_counts["active"] + status_counts["ready"] > 0:
+            print(f"  ✅ \033[92m{status_counts['active'] + status_counts['ready']} account(s) AVAILABLE\033[0m\n")
+
+        print(f"{'ID':<36} {'Alias':<25} {'Status':<12} {'Priority':<8} {'Usage':<8}")
+        print("-" * 100)
+        for acc in accounts:
+            status = acc.get("status", "unknown")
+            # Status with icon and color
+            status_display = {
+                "active": "✅ active",
+                "ready": "✅ ready",
+                "cooldown": "⏳ cooldown",
+                "error": "❌ ERROR",
+            }.get(status, status)
             status_color = {
                 "active": "\033[92m",
                 "ready": "\033[92m",
@@ -575,7 +601,7 @@ def _handle_account_command(args) -> None:
             }.get(status, "")
             reset = "\033[0m"
             usage = acc.get("usage_percent", 0)
-            print(f"{acc['id']:<36} {acc['alias']:<25} {status_color}{status:<10}{reset} {acc.get('priority', 5):<8} {usage:.1f}%")
+            print(f"{acc['id']:<36} {acc['alias']:<25} {status_color}{status_display:<12}{reset} {acc.get('priority', 5):<8} {usage:.1f}%")
 
     elif args.account_command == "show":
         account = pool_service.get_account_info(args.account_id)
@@ -634,6 +660,34 @@ def _handle_account_command(args) -> None:
             print(f"Account '{args.account_id}' not found.")
             sys.exit(1)
 
+    elif args.account_command == "reset":
+        account = pool_service.get_account_info(args.account_id)
+        if not account:
+            print(f"Account '{args.account_id}' not found.")
+            sys.exit(1)
+
+        current_status = account.get("status", "unknown")
+        if current_status != "error":
+            print(f"Account '{account.get('alias', args.account_id)}' is not in error state (current: {current_status}).")
+            print("Only accounts with 'error' status can be reset.")
+            sys.exit(1)
+
+        if not args.force:
+            alias = account.get("alias", args.account_id)
+            error_reason = account.get("last_error", "unknown error")
+            print(f"Account: {alias}")
+            print(f"Last Error: {error_reason}")
+            confirm = input(f"Reset this account to active state? [y/N]: ").strip().lower()
+            if confirm != "y":
+                print("Cancelled.")
+                return
+
+        if pool_service.reset_account_status(args.account_id):
+            print(f"✅ Account '{account.get('alias', args.account_id)}' reset to active state.")
+        else:
+            print(f"Failed to reset account '{args.account_id}'.")
+            sys.exit(1)
+
 
 def _handle_pool_command(args) -> None:
     """Handle pool subcommands."""
@@ -646,21 +700,55 @@ def _handle_pool_command(args) -> None:
             print(json.dumps(status, indent=2))
             return
 
+        total = status.get('total_accounts', 0)
+        active = status.get('active_accounts', 0)
+        ready = status.get('ready_accounts', 0)
+        cooldown = status.get('cooldown_accounts', 0)
+        error = status.get('error_accounts', 0)
+
         print("📊 Pool Status\n")
-        print(f"  Total Accounts:     {status.get('total_accounts', 0)}")
-        print(f"  Active:             {status.get('active_accounts', 0)}")
-        print(f"  Cooldown:           {status.get('cooldown_accounts', 0)}")
-        print(f"  Error:              {status.get('error_accounts', 0)}")
+        print(f"  Total Accounts:     {total}")
+
+        # Show available count prominently
+        available = active + ready
+        if available > 0:
+            print(f"  ✅ Available:       \033[92m{available}\033[0m (active: {active}, ready: {ready})")
+        else:
+            print(f"  ❌ Available:       \033[91m0\033[0m - No accounts available!")
+
+        if cooldown > 0:
+            print(f"  ⏳ Cooldown:        \033[93m{cooldown}\033[0m")
+        if error > 0:
+            print(f"  ⚠️  Error:           \033[91m{error}\033[0m - Use 'chatmock account reset <id>' to recover")
 
         accounts = status.get("accounts", [])
         if accounts:
             print("\n📋 Accounts\n")
-            print(f"{'Alias':<20} {'Status':<10} {'Priority':<8} {'Usage':<8}")
-            print("-" * 50)
+            print(f"{'Alias':<25} {'Status':<12} {'Priority':<8} {'Usage':<8}")
+            print("-" * 60)
             for acc in accounts:
                 status_str = acc.get("status", "unknown")
+                # Status with icon
+                status_display = {
+                    "active": "✅ active",
+                    "ready": "✅ ready",
+                    "cooldown": "⏳ cooldown",
+                    "error": "❌ ERROR",
+                }.get(status_str, status_str)
+                status_color = {
+                    "active": "\033[92m",
+                    "ready": "\033[92m",
+                    "cooldown": "\033[93m",
+                    "error": "\033[91m",
+                }.get(status_str, "")
+                reset = "\033[0m"
                 usage = acc.get("usage_percent", 0)
-                print(f"{acc.get('alias', acc.get('id', 'unknown')):<20} {status_str:<10} {acc.get('priority', 5):<8} {usage:.1f}%")
+                alias = acc.get('alias', acc.get('id', 'unknown'))[:24]
+                print(f"{alias:<25} {status_color}{status_display:<12}{reset} {acc.get('priority', 5):<8} {usage:.1f}%")
+
+                # Show error reason if present
+                if status_str == "error" and acc.get("last_error"):
+                    print(f"    └─ Error: {acc.get('last_error')}")
 
 
 if __name__ == "__main__":

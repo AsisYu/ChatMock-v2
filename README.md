@@ -86,8 +86,29 @@ chatmock account priority <account-id> 1
 # 重命名账户
 chatmock account rename <account-id> "work-account"
 
+# 重置错误状态的账户（从 error 恢复到 active）
+chatmock account reset <account-id>
+
 # 移除账户
 chatmock account remove <account-id>
+```
+
+### 账户状态说明
+
+| 状态 | 图标 | 说明 |
+|------|------|------|
+| `active` | ✅ | 正常可用 |
+| `ready` | ✅ | 冷却结束，等待使用 |
+| `cooldown` | ⏳ | 速率限制冷却中 |
+| `error` | ❌ | 认证失败或连续请求失败，需手动重置 |
+
+**恢复 error 状态账户**：
+```bash
+# 查看哪些账户有错误
+chatmock pool status
+
+# 重置单个账户
+chatmock account reset <account-id>
 ```
 
 ### 池状态

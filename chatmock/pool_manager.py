@@ -1170,6 +1170,30 @@ class PoolService:
         self._save()
         return True
 
+    def reset_account_status(self, account_id: str) -> bool:
+        """
+        Reset an account from error state to active.
+        Clears error reason and consecutive failure count.
+        Thread-safe.
+
+        Returns:
+            True if reset, False if account not found or not in error state
+        """
+        with self.pool._lock:
+            account = self.pool.get_account_by_id(account_id)
+            if not account:
+                return False
+            if account.status != AccountStatus.ERROR:
+                return False
+
+            # Reset to active/ready state
+            account.status = AccountStatus.ACTIVE
+            account.diagnostics.error_reason = None
+            account.diagnostics.consecutive_failures = 0
+            account.cooldown_until = None
+        self._save()
+        return True
+
     def update_account_tokens(
         self,
         account_id: str,
