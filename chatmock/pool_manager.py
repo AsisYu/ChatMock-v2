@@ -339,6 +339,7 @@ class AccountPool:
         self._lock = threading.RLock()
         self._migration_state: str = "complete"
         self._checksum: Optional[str] = None
+        self._deleted_ids: set = set()  # Track deleted accounts to prevent resurrection
 
         # Callbacks for external hooks
         self._on_account_added: Optional[Callable[[Account], None]] = None
@@ -434,6 +435,8 @@ class AccountPool:
             for i, acc in enumerate(self.accounts):
                 if acc.id == account_id:
                     removed = self.accounts.pop(i)
+                    # Track deletion to prevent resurrection during merge
+                    self._deleted_ids.add(account_id)
                     # Adjust current_index if needed
                     if self.current_index >= len(self.accounts) and len(self.accounts) > 0:
                         self.current_index = len(self.accounts) - 1
@@ -561,7 +564,8 @@ class AccountPool:
 
             return {
                 "total_accounts": len(self.accounts),
-                "active_accounts": status_counts[AccountStatus.ACTIVE] + status_counts[AccountStatus.READY],
+                "active_accounts": status_counts[AccountStatus.ACTIVE],
+                "ready_accounts": status_counts[AccountStatus.READY],
                 "cooldown_accounts": status_counts[AccountStatus.COOLDOWN],
                 "error_accounts": status_counts[AccountStatus.ERROR],
                 "accounts": [self._account_to_status_dict(acc) for acc in self.accounts],
@@ -814,6 +818,9 @@ class PoolStorage:
         - From external: add (may have been added by CLI)
         - From current only: add (new account not yet saved)
 
+        Respects deletions:
+        - Accounts in _deleted_ids are excluded from merge (prevent resurrection)
+
         Returns:
             Merged pool
         """
@@ -822,6 +829,7 @@ class PoolStorage:
 
             with current_pool._lock:
                 current_accounts = {acc.id: acc.to_dict() for acc in current_pool.accounts}
+                deleted_ids = current_pool._deleted_ids.copy()
 
             with external_pool._lock:
                 external_accounts = {acc.id: acc.to_dict() for acc in external_pool.accounts}
@@ -831,6 +839,10 @@ class PoolStorage:
             all_ids = set(current_accounts.keys()) | set(external_accounts.keys())
 
             for account_id in all_ids:
+                # Skip deleted accounts (prevent resurrection)
+                if account_id in deleted_ids:
+                    continue
+
                 if account_id in current_accounts and account_id in external_accounts:
                     # Both exist: field-level merge
                     current = current_accounts[account_id]
@@ -849,14 +861,16 @@ class PoolStorage:
                 elif account_id in current_accounts:
                     # Only in current: new local account
                     merged_accounts.append(Account.from_dict(current_accounts[account_id]))
-                else:
-                    # Only in external: new external account
+                elif account_id in external_accounts:
+                    # Only in external: add unless the ID was explicitly deleted locally
                     merged_accounts.append(Account.from_dict(external_accounts[account_id]))
+                # Note: explicit deletions are still honored via the deleted_ids guard above
 
             # Create merged pool with current config
             merged_pool = AccountPool(config=current_pool.config)
             merged_pool.accounts = merged_accounts
             merged_pool._migration_state = current_pool._migration_state
+            merged_pool._deleted_ids = deleted_ids  # Preserve deleted tracking
 
             return merged_pool
 
@@ -1032,6 +1046,9 @@ class PoolService:
         if merged_pool is not None:
             # Update in-memory pool with merged data to preserve external changes
             self._pool = merged_pool
+        if result:
+            # Clear deleted tracking after successful save (even when pool was replaced)
+            self.pool._deleted_ids.clear()
         return result
 
     # ==================== Auth Integration ====================
@@ -1174,25 +1191,40 @@ class PoolService:
         """
         Reset an account from error state to active.
         Clears error reason and consecutive failure count.
-        Thread-safe.
+        Thread-safe with retry logic to handle external writes.
 
         Returns:
             True if reset, False if account not found or not in error state
         """
-        with self.pool._lock:
-            account = self.pool.get_account_by_id(account_id)
-            if not account:
-                return False
-            if account.status != AccountStatus.ERROR:
-                return False
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            with self.pool._lock:
+                account = self.pool.get_account_by_id(account_id)
+                if not account:
+                    return False
+                if account.status != AccountStatus.ERROR:
+                    # On retries another writer may have already cleared the error
+                    return attempt > 0
 
-            # Reset to active/ready state
-            account.status = AccountStatus.ACTIVE
-            account.diagnostics.error_reason = None
-            account.diagnostics.consecutive_failures = 0
-            account.cooldown_until = None
-        self._save()
-        return True
+                # Reset to active/ready state
+                account.status = AccountStatus.ACTIVE
+                account.diagnostics.error_reason = None
+                account.diagnostics.consecutive_failures = 0
+                account.cooldown_until = None
+
+            if not self._save():
+                self.reload_pool()
+                continue
+
+            # Verify the reset persisted
+            updated = self.pool.get_account_by_id(account_id)
+            if updated and updated.status != AccountStatus.ERROR:
+                return True
+
+            # External writer overwrote the reset; reload latest state and retry
+            self.reload_pool()
+
+        return False
 
     def update_account_tokens(
         self,
