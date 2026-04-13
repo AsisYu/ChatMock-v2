@@ -20,7 +20,7 @@
 
 <br>
 
-## 安装
+## ChatMock安装
 
 #### Homebrew
 ```bash
@@ -38,6 +38,16 @@ pipx install chatmock
 
 #### Docker
 参见 [DOCKER.md](DOCKER.md)
+
+## ChatMock-v2安装
+
+#### git本仓库
+```bash
+git clone https://github.com/AsisYu/ChatMock-v2.git
+pip install -r requirements.txt
+python chatmock.py login
+python chatmock.py serve
+```
 
 <br>
 
