@@ -8,6 +8,7 @@ from .model_registry import normalize_model_name
 
 PRIORITY_SUPPORTED_MODELS = frozenset(
     (
+        "gpt-5.5",
         "gpt-5.4",
         "gpt-5.2",
         "gpt-5.1",

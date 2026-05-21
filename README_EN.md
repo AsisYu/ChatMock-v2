@@ -1,6 +1,6 @@
 <div align="center">
 
-# ChatMock
+# ChatMock-v2
 
 **Allows Codex to work in your favourite chat apps and coding tools.**
 
@@ -8,12 +8,14 @@
 
 [![PyPI](https://img.shields.io/pypi/v/chatmock?color=blue&label=pypi)](https://pypi.org/project/chatmock/)
 [![Python](https://img.shields.io/pypi/pyversions/chatmock)](https://pypi.org/project/chatmock/)
-[![License](https://img.shields.io/github/license/RayBytes/ChatMock)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/RayBytes/ChatMock?style=flat)](https://github.com/RayBytes/ChatMock/stargazers)
-[![Last Commit](https://img.shields.io/github/last-commit/RayBytes/ChatMock)](https://github.com/RayBytes/ChatMock/commits/main)
-[![Issues](https://img.shields.io/github/issues/RayBytes/ChatMock)](https://github.com/RayBytes/ChatMock/issues)
+[![License](https://img.shields.io/github/license/AsisYu/ChatMock-v2)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/AsisYu/ChatMock-v2?style=flat)](https://github.com/AsisYu/ChatMock-v2/stargazers)
+[![Last Commit](https://img.shields.io/github/last-commit/AsisYu/ChatMock-v2)](https://github.com/AsisYu/ChatMock-v2/commits/main)
+[![Issues](https://img.shields.io/github/issues/AsisYu/ChatMock-v2)](https://github.com/AsisYu/ChatMock-v2/issues)
 
 <br>
+
+> **About v2**: ChatMock-v2 is an enhanced fork of [RayBytes/ChatMock](https://github.com/RayBytes/ChatMock) with API Token authentication, multi-account pool management and other enterprise features.
 
 
 </div>
@@ -197,6 +199,7 @@ curl http://127.0.0.1:8000/v1/chat/completions \
 
 ## Supported Models
 
+- `gpt-5.5`
 - `gpt-5.4`
 - `gpt-5.4-mini`
 - `gpt-5.2`
@@ -228,14 +231,16 @@ curl http://127.0.0.1:8000/v1/chat/completions \
 
 <br>
 
-## API Authentication
+## v2 Authentication
 
-By default, ChatMock accepts requests without authentication (suitable for localhost development).
+ChatMock-v2 provides two layers of authentication:
 
-To enable authentication, set an API token:
+### 1. Proxy API Authentication (protects `/v1/chat/completions` and other proxy endpoints)
+
+By default, authentication is not enabled (suitable for local development). When enabled, clients must include a token:
 
 ```bash
-# Via environment variable
+# Enable via environment variable
 export CHATMOCK_API_TOKEN="your-secret-token"
 chatmock serve
 
@@ -257,8 +262,24 @@ client = OpenAI(
 ```bash
 curl -H "Authorization: Bearer your-secret-token" \
   http://127.0.0.1:8000/v1/chat/completions \
-  -d '{"model": "gpt-5.4", "messages": [{"role": "user", "content": "hello"}]}'
+  -d '{"model": "gpt-5.5", "messages": [{"role": "user", "content": "hello"}]}'
 ```
+
+**Behavior**:
+- No `CHATMOCK_API_TOKEN` set: all requests pass through (backward compatible)
+- `CHATMOCK_API_TOKEN` set: requires `Authorization: Bearer <token>` to match
+- Proxy headers detected without token: prints security warning but still allows
+
+### 2. Pool Management API Authentication (protects `/v1/pool/*` management endpoints)
+
+```bash
+export CHATMOCK_POOL_API_TOKEN="your-pool-secret-token"
+```
+
+**Behavior**:
+- `CHATMOCK_POOL_API_TOKEN` set: requires Bearer token to match
+- No token but proxy headers detected: rejects access (prevents unauthorized management)
+- No token and direct localhost: allows localhost access
 
 <br>
 
@@ -313,4 +334,4 @@ Use responsibly and at your own risk. This project is not affiliated with OpenAI
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=RayBytes/ChatMock&type=Timeline)](https://www.star-history.com/#RayBytes/ChatMock&Timeline)
+[![Star History Chart](https://api.star-history.com/svg?repos=AsisYu/ChatMock-v2&type=Timeline)](https://www.star-history.com/#AsisYu/ChatMock-v2&Timeline)
