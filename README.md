@@ -42,6 +42,7 @@ pipx install chatmock
 参见 [DOCKER.md](DOCKER.md)
 
 ## ChatMock-v2安装
+使用多号池请**git本仓库**，而不是通过brew和pipx。
 
 #### git本仓库
 ```bash
@@ -57,10 +58,10 @@ python chatmock.py serve
 
 ```bash
 # 1. 使用 ChatGPT 账号登录
-chatmock login
+chatmock.py login
 
 # 2. 启动服务器
-chatmock serve
+chatmock.py serve
 ```
 
 服务器默认运行在 `http://127.0.0.1:8000`。将 `http://127.0.0.1:8000/v1` 作为 OpenAI 兼容应用的基础 URL。
@@ -69,16 +70,16 @@ chatmock serve
 
 ## 多账户池
 
-ChatMock 支持多个 ChatGPT 账户，并在触发速率限制时自动切换。
+ChatMock-v2 支持多个 ChatGPT 账户，并在触发速率限制时自动切换。
 
 ### 添加账户
 
 ```bash
 # 添加第一个账户
-chatmock login
+chatmock.py login
 
 # 添加更多账户（再次运行 login）
-chatmock login
+chatmock.py login
 ```
 
 每次登录都会提示你确认将账户添加到池中。
@@ -87,22 +88,22 @@ chatmock login
 
 ```bash
 # 列出所有账户
-chatmock account list
+chatmock.py account list
 
 # 显示账户详情
-chatmock account show <account-id>
+chatmock.py account show <account-id>
 
 # 设置账户优先级 (1=最高, 10=最低)
-chatmock account priority <account-id> 1
+chatmock.py account priority <account-id> 1
 
 # 重命名账户
-chatmock account rename <account-id> "work-account"
+chatmock.py account rename <account-id> "work-account"
 
 # 重置错误状态的账户（从 error 恢复到 active）
-chatmock account reset <account-id>
+chatmock.py account reset <account-id>
 
 # 移除账户
-chatmock account remove <account-id>
+chatmock.py account remove <account-id>
 ```
 
 ### 账户状态说明
@@ -117,20 +118,20 @@ chatmock account remove <account-id>
 **恢复 error 状态账户**：
 ```bash
 # 查看哪些账户有错误
-chatmock pool status
+chatmock.py pool status
 
 # 重置单个账户
-chatmock account reset <account-id>
+chatmock.py account reset <account-id>
 ```
 
 ### 池状态
 
 ```bash
 # 查看池状态
-chatmock pool status
+chatmock.py pool status
 
 # 以 JSON 格式查看
-chatmock pool status --json
+chatmock.py pool status --json
 ```
 
 ### API 端点
@@ -252,10 +253,10 @@ ChatMock-v2 提供两层认证机制：
 ```bash
 # 通过环境变量启用
 export CHATMOCK_API_TOKEN="your-secret-token"
-chatmock serve
+chatmock.py serve
 
 # 或通过 CLI 参数
-chatmock serve --api-token "your-secret-token"
+chatmock.py serve --api-token "your-secret-token"
 ```
 
 启用后，客户端请求必须携带 Token：
